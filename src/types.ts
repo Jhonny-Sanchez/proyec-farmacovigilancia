@@ -76,6 +76,10 @@ export interface RegistroError {
   politerapia_monoterapia: DocumentoAdjunto[];
   formula_medica: DocumentoAdjunto[];
   consentimiento_informado: DocumentoAdjunto[];
+  resultados_laboratorio: DocumentoAdjunto[];
+  resultados_imagenes: DocumentoAdjunto[];
+  autorizacion_eps: DocumentoAdjunto[];
+  otros_documentos: DocumentoAdjunto[];
 
   // Scheduler / Programador custom fields
   cantidad_ciclos?: number;

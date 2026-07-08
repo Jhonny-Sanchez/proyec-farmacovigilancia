@@ -13,6 +13,7 @@ import {
   DocumentoAdjunto,
   ErrorStatus,
 } from '../types';
+import { subirPDF } from '../dataService';
 import { 
   ClipboardList, 
   CheckCircle, 
@@ -22,7 +23,8 @@ import {
   FileUp,
   AlertCircle,
   Sparkles,
-  Lock
+  Lock,
+  Loader2
 } from 'lucide-react';
 
 interface NuevoRegistroViewProps {
@@ -78,7 +80,7 @@ export default function NuevoRegistroView({
   const [celularContactoAdicional1, setCelularContactoAdicional1] = useState('');
   const [celularContactoAdicional2, setCelularContactoAdicional2] = useState('');
 
-  // 4 Core PDF Document States (simulating file metadata and storing notes)
+  // 8 PDF Document States (file + notes + drag flag)
   const [hcFile, setHcFile] = useState<File | null>(null);
   const [hcFileName, setHcFileName] = useState('');
   const [hcNotes, setHcNotes] = useState('');
@@ -99,9 +101,30 @@ export default function NuevoRegistroView({
   const [ciNotes, setCiNotes] = useState('');
   const [dragActiveCI, setDragActiveCI] = useState(false);
 
+  const [labFile, setLabFile] = useState<File | null>(null);
+  const [labFileName, setLabFileName] = useState('');
+  const [labNotes, setLabNotes] = useState('');
+  const [dragActiveLAB, setDragActiveLAB] = useState(false);
+
+  const [imgFile, setImgFile] = useState<File | null>(null);
+  const [imgFileName, setImgFileName] = useState('');
+  const [imgNotes, setImgNotes] = useState('');
+  const [dragActiveIMG, setDragActiveIMG] = useState(false);
+
+  const [epsFile, setEpsFile] = useState<File | null>(null);
+  const [epsFileName, setEpsFileName] = useState('');
+  const [epsNotes, setEpsNotes] = useState('');
+  const [dragActiveEPS, setDragActiveEPS] = useState(false);
+
+  const [otrosFile, setOtrosFile] = useState<File | null>(null);
+  const [otrosFileName, setOtrosFileName] = useState('');
+  const [otrosNotes, setOtrosNotes] = useState('');
+  const [dragActiveOTROS, setDragActiveOTROS] = useState(false);
+
   // Validation feedback
   const [errorMsg, setErrorMsg] = useState('');
   const [success, setSuccess] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Format file size dynamically
   const formatFileSize = (file: File | null, defaultSize: string) => {
@@ -191,22 +214,6 @@ export default function NuevoRegistroView({
     }
   }, [documento, errors, lastLoadedDoc]);
 
-  const loadExistingPatientData = () => {
-    const existing = errors.find(e => e.numero_documento.trim() === documento.trim());
-    if (existing) {
-      setNombre(existing.nombre_paciente);
-      setApellidos(existing.apellidos_paciente);
-      setEps(existing.eps);
-      setMedico(existing.medico);
-      setOrigen(existing.origen_formula);
-      setTelefonoFijo(existing.telefono_fijo || '');
-      setNumeroCelular(existing.numero_celular || '');
-      setCelularContactoAdicional1(existing.celular_contacto_adicional_1 || '');
-      setCelularContactoAdicional2(existing.celular_contacto_adicional_2 || '');
-      setObservaciones(`[ACTUALIZACIÓN EXPEDIENTE] Carga de nuevos documentos para paciente recurrente.`);
-    }
-  };
-
   // Helper to generate file names based on patient name if none uploaded manually
   const autoFillFileNames = () => {
     const cleanName = nombre.trim().toLowerCase().replace(/\s+/g, '_') || 'paciente';
@@ -215,13 +222,45 @@ export default function NuevoRegistroView({
     if (!pmFileName) setPmFileName(`politerapia_monoterapia_${cleanName}${suffix}.pdf`);
     if (!fmFileName) setFmFileName(`formula_medica_${cleanName}${suffix}.pdf`);
     if (!ciFileName) setCiFileName(`consentimiento_informado_${cleanName}${suffix}.pdf`);
+    if (!labFileName) setLabFileName(`resultados_laboratorio_${cleanName}${suffix}.pdf`);
+    if (!imgFileName) setImgFileName(`resultados_imagenes_${cleanName}${suffix}.pdf`);
+    if (!epsFileName) setEpsFileName(`autorizacion_eps_${cleanName}${suffix}.pdf`);
+    if (!otrosFileName) setOtrosFileName(`otros_documentos_${cleanName}${suffix}.pdf`);
   };
 
   useEffect(() => {
     autoFillFileNames();
   }, [nombre, isUpdatingExisting]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Build a document array for a section: uploads the file to Supabase (if any) and returns [] or [doc]
+  const construirDocs = async (
+    idRegistro: string,
+    tipo: string,
+    file: File | null,
+    fileName: string,
+    notes: string,
+    prefijo: string,
+    tamanoDefault: string,
+    contexto: string
+  ): Promise<DocumentoAdjunto[]> => {
+    if (!file) return []; // Si no hay archivo, no se crea documento
+
+    const ruta = await subirPDF(file, idRegistro, tipo);
+
+    const doc: DocumentoAdjunto = {
+      id_documento: `${prefijo}-${Date.now()}`,
+      nombre_archivo: fileName || `${tipo}_${nombre.trim().toLowerCase()}.pdf`,
+      tamano: formatFileSize(file, tamanoDefault),
+      fecha_carga: sysDate,
+      cargado_por: currentUser.nombre_usuario,
+      notas: notes.trim() || contexto,
+      es_correccion: false,
+      url: ruta || undefined, // Guardamos la RUTA de Supabase Storage
+    };
+    return [doc];
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -251,188 +290,147 @@ export default function NuevoRegistroView({
       return;
     }
 
-    if (isUpdatingExisting) {
-      const existing = errors.find(e => e.numero_documento.trim() === documento.trim());
-      if (existing) {
-        // Prepare PDF objects to append
-        const newHcDoc: DocumentoAdjunto = {
-          id_documento: `DOC-HC-${Date.now()}`,
-          nombre_archivo: hcFileName || `historia_clinica_${nombre.trim().toLowerCase()}_act.pdf`,
-          tamano: formatFileSize(hcFile, '1.4 MB'),
-          fecha_carga: sysDate,
-          cargado_por: currentUser.nombre_usuario,
-          notas: hcNotes.trim() || 'Cargado durante la actualización de ciclo.',
-          es_correccion: false,
-          url: hcFile ? URL.createObjectURL(hcFile) : undefined,
-        };
+    setUploading(true);
 
-        const newPmDoc: DocumentoAdjunto = {
-          id_documento: `DOC-PM-${Date.now()}`,
-          nombre_archivo: pmFileName || `politerapia_${nombre.trim().toLowerCase()}_act.pdf`,
-          tamano: formatFileSize(pmFile, '0.8 MB'),
-          fecha_carga: sysDate,
-          cargado_por: currentUser.nombre_usuario,
-          notas: pmNotes.trim() || 'Cargado durante la actualización de ciclo.',
-          es_correccion: false,
-          url: pmFile ? URL.createObjectURL(pmFile) : undefined,
-        };
+    try {
+      if (isUpdatingExisting) {
+        const existing = errors.find(e => e.numero_documento.trim() === documento.trim());
+        if (existing) {
+          const idReg = existing.id_registro;
+          const ctx = 'Cargado durante la actualización de ciclo.';
 
-        const newFmDoc: DocumentoAdjunto = {
-          id_documento: `DOC-FM-${Date.now()}`,
-          nombre_archivo: fmFileName || `formula_medica_${nombre.trim().toLowerCase()}_act.pdf`,
-          tamano: formatFileSize(fmFile, '1.1 MB'),
-          fecha_carga: sysDate,
-          cargado_por: currentUser.nombre_usuario,
-          notas: fmNotes.trim() || 'Cargado durante la actualización de ciclo.',
-          es_correccion: false,
-          url: fmFile ? URL.createObjectURL(fmFile) : undefined,
-        };
+          const newHC = await construirDocs(idReg, 'historia_clinica', hcFile, hcFileName, hcNotes, 'DOC-HC', '1.4 MB', ctx);
+          const newPM = await construirDocs(idReg, 'politerapia_monoterapia', pmFile, pmFileName, pmNotes, 'DOC-PM', '0.8 MB', ctx);
+          const newFM = await construirDocs(idReg, 'formula_medica', fmFile, fmFileName, fmNotes, 'DOC-FM', '1.1 MB', ctx);
+          const newCI = await construirDocs(idReg, 'consentimiento_informado', ciFile, ciFileName, ciNotes, 'DOC-CI', '2.0 MB', ctx);
+          const newLAB = await construirDocs(idReg, 'resultados_laboratorio', labFile, labFileName, labNotes, 'DOC-LAB', '1.0 MB', ctx);
+          const newIMG = await construirDocs(idReg, 'resultados_imagenes', imgFile, imgFileName, imgNotes, 'DOC-IMG', '1.0 MB', ctx);
+          const newEPS = await construirDocs(idReg, 'autorizacion_eps', epsFile, epsFileName, epsNotes, 'DOC-EPS', '0.5 MB', ctx);
+          const newOTROS = await construirDocs(idReg, 'otros_documentos', otrosFile, otrosFileName, otrosNotes, 'DOC-OTROS', '0.5 MB', ctx);
 
-        const newCiDoc: DocumentoAdjunto = {
-          id_documento: `DOC-CI-${Date.now()}`,
-          nombre_archivo: ciFileName || `consentimiento_${nombre.trim().toLowerCase()}_act.pdf`,
-          tamano: formatFileSize(ciFile, '2.0 MB'),
-          fecha_carga: sysDate,
-          cargado_por: currentUser.nombre_usuario,
-          notas: ciNotes.trim() || 'Cargado durante la actualización de ciclo.',
-          es_correccion: false,
-          url: ciFile ? URL.createObjectURL(ciFile) : undefined,
-        };
+          const updatedHC = [...(existing.historia_clinica || []), ...newHC];
+          const updatedPM = [...(existing.politerapia_monoterapia || []), ...newPM];
+          const updatedFM = [...(existing.formula_medica || []), ...newFM];
+          const updatedCI = [...(existing.consentimiento_informado || []), ...newCI];
+          const updatedLAB = [...(existing.resultados_laboratorio || []), ...newLAB];
+          const updatedIMG = [...(existing.resultados_imagenes || []), ...newIMG];
+          const updatedEPS = [...(existing.autorizacion_eps || []), ...newEPS];
+          const updatedOTROS = [...(existing.otros_documentos || []), ...newOTROS];
 
-        const updatedHC = [...(existing.historia_clinica || []), newHcDoc];
-        const updatedPM = [...(existing.politerapia_monoterapia || []), newPmDoc];
-        const updatedFM = [...(existing.formula_medica || []), newFmDoc];
-        const updatedCI = [...(existing.consentimiento_informado || []), newCiDoc];
+          const notesLine = observaciones.trim()
+            ? `\n[ACTUALIZACIÓN - ${sysDate} ${sysTime}]: ${observaciones.trim()}`
+            : `\n[ACTUALIZACIÓN - ${sysDate} ${sysTime}]: Se cargaron nuevos PDF para actualizar el expediente de este paciente recurrente.`;
 
-        const notesLine = observaciones.trim()
-          ? `\n[ACTUALIZACIÓN - ${sysDate} ${sysTime}]: ${observaciones.trim()}`
-          : `\n[ACTUALIZACIÓN - ${sysDate} ${sysTime}]: Se cargaron nuevos PDF para actualizar el expediente de este paciente recurrente.`;
-
-        if (onUpdateErrorStatus) {
-          onUpdateErrorStatus(existing.id_registro, 'ENTREGADO_QF', {
-            historia_clinica: updatedHC,
-            politerapia_monoterapia: updatedPM,
-            formula_medica: updatedFM,
-            consentimiento_informado: updatedCI,
-            observaciones: (existing.observaciones || '') + notesLine,
-            tipo_error: '', // clear old error categorization for QF to re-audit
-          });
+          if (onUpdateErrorStatus) {
+            onUpdateErrorStatus(existing.id_registro, 'ENTREGADO_QF', {
+              historia_clinica: updatedHC,
+              politerapia_monoterapia: updatedPM,
+              formula_medica: updatedFM,
+              consentimiento_informado: updatedCI,
+              resultados_laboratorio: updatedLAB,
+              resultados_imagenes: updatedIMG,
+              autorizacion_eps: updatedEPS,
+              otros_documentos: updatedOTROS,
+              observaciones: (existing.observaciones || '') + notesLine,
+              tipo_error: '',
+            });
+          }
+          setSuccess(true);
         }
+      } else {
+        const idReg = nextId;
+        const ctx = 'Cargado durante el registro inicial.';
+
+        const docsHC = await construirDocs(idReg, 'historia_clinica', hcFile, hcFileName, hcNotes, 'DOC-HC', '1.4 MB', ctx);
+        const docsPM = await construirDocs(idReg, 'politerapia_monoterapia', pmFile, pmFileName, pmNotes, 'DOC-PM', '0.8 MB', ctx);
+        const docsFM = await construirDocs(idReg, 'formula_medica', fmFile, fmFileName, fmNotes, 'DOC-FM', '1.1 MB', ctx);
+        const docsCI = await construirDocs(idReg, 'consentimiento_informado', ciFile, ciFileName, ciNotes, 'DOC-CI', '2.0 MB', ctx);
+        const docsLAB = await construirDocs(idReg, 'resultados_laboratorio', labFile, labFileName, labNotes, 'DOC-LAB', '1.0 MB', ctx);
+        const docsIMG = await construirDocs(idReg, 'resultados_imagenes', imgFile, imgFileName, imgNotes, 'DOC-IMG', '1.0 MB', ctx);
+        const docsEPS = await construirDocs(idReg, 'autorizacion_eps', epsFile, epsFileName, epsNotes, 'DOC-EPS', '0.5 MB', ctx);
+        const docsOTROS = await construirDocs(idReg, 'otros_documentos', otrosFile, otrosFileName, otrosNotes, 'DOC-OTROS', '0.5 MB', ctx);
+
+        // Create registry object
+        const newRecord: RegistroError = {
+          id_registro: nextId,
+          fecha_registro: sysDate,
+          hora_registro: sysTime,
+          usuario_registro: currentUser.nombre_usuario,
+          nombre_paciente: nombre.trim(),
+          apellidos_paciente: apellidos.trim(),
+          numero_documento: documento.trim(),
+          eps,
+          medico,
+          tipo_error: '',
+          origen_formula: origen,
+          observaciones: observaciones.trim() || undefined,
+          estado_actual: 'ENTREGADO_QF',
+          historial_estados: [
+            {
+              estado: 'ENTREGADO_QF',
+              fecha: sysDate,
+              hora: sysTime,
+              usuario: currentUser.nombre_usuario,
+            },
+          ],
+          telefono_fijo: telefonoFijo.trim() || undefined,
+          numero_celular: numeroCelular.trim(),
+          celular_contacto_adicional_1: celularContactoAdicional1.trim() || undefined,
+          celular_contacto_adicional_2: celularContactoAdicional2.trim() || undefined,
+          historia_clinica: docsHC,
+          politerapia_monoterapia: docsPM,
+          formula_medica: docsFM,
+          consentimiento_informado: docsCI,
+          resultados_laboratorio: docsLAB,
+          resultados_imagenes: docsIMG,
+          autorizacion_eps: docsEPS,
+          otros_documentos: docsOTROS,
+        };
+
+        onAddError(newRecord);
         setSuccess(true);
       }
-    } else {
-      // Prepare PDF objects for a brand new patient
-      const docsHC: DocumentoAdjunto[] = [
-        {
-          id_documento: `DOC-HC-${Date.now()}`,
-          nombre_archivo: hcFileName || `historia_clinica_${nombre.trim().toLowerCase()}.pdf`,
-          tamano: formatFileSize(hcFile, '1.4 MB'),
-          fecha_carga: sysDate,
-          cargado_por: currentUser.nombre_usuario,
-          notas: hcNotes.trim() || 'Cargado durante el registro inicial.',
-          es_correccion: false,
-          url: hcFile ? URL.createObjectURL(hcFile) : undefined,
-        }
-      ];
 
-      const docsPM: DocumentoAdjunto[] = [
-        {
-          id_documento: `DOC-PM-${Date.now()}`,
-          nombre_archivo: pmFileName || `politerapia_${nombre.trim().toLowerCase()}.pdf`,
-          tamano: formatFileSize(pmFile, '0.8 MB'),
-          fecha_carga: sysDate,
-          cargado_por: currentUser.nombre_usuario,
-          notas: pmNotes.trim() || 'Cargado durante el registro inicial.',
-          es_correccion: false,
-          url: pmFile ? URL.createObjectURL(pmFile) : undefined,
-        }
-      ];
+      // Reset Form
+      setNombre('');
+      setApellidos('');
+      setDocumento('');
+      setEps('');
+      setMedico('');
+      setObservaciones('');
+      setTelefonoFijo('');
+      setNumeroCelular('');
+      setCelularContactoAdicional1('');
+      setCelularContactoAdicional2('');
+      setHcFile(null);
+      setPmFile(null);
+      setFmFile(null);
+      setCiFile(null);
+      setLabFile(null);
+      setImgFile(null);
+      setEpsFile(null);
+      setOtrosFile(null);
+      setHcNotes('');
+      setPmNotes('');
+      setFmNotes('');
+      setCiNotes('');
+      setLabNotes('');
+      setImgNotes('');
+      setEpsNotes('');
+      setOtrosNotes('');
+      setLastLoadedDoc('');
+      setIsUpdatingExisting(false);
 
-      const docsFM: DocumentoAdjunto[] = [
-        {
-          id_documento: `DOC-FM-${Date.now()}`,
-          nombre_archivo: fmFileName || `formula_medica_${nombre.trim().toLowerCase()}.pdf`,
-          tamano: formatFileSize(fmFile, '1.1 MB'),
-          fecha_carga: sysDate,
-          cargado_por: currentUser.nombre_usuario,
-          notas: fmNotes.trim() || 'Cargado durante el registro inicial.',
-          es_correccion: false,
-          url: fmFile ? URL.createObjectURL(fmFile) : undefined,
-        }
-      ];
-
-      const docsCI: DocumentoAdjunto[] = [
-        {
-          id_documento: `DOC-CI-${Date.now()}`,
-          nombre_archivo: ciFileName || `consentimiento_${nombre.trim().toLowerCase()}.pdf`,
-          tamano: formatFileSize(ciFile, '2.0 MB'),
-          fecha_carga: sysDate,
-          cargado_por: currentUser.nombre_usuario,
-          notas: ciNotes.trim() || 'Cargado durante el registro inicial.',
-          es_correccion: false,
-          url: ciFile ? URL.createObjectURL(ciFile) : undefined,
-        }
-      ];
-
-      // Create registry object
-      const newRecord: RegistroError = {
-        id_registro: nextId,
-        fecha_registro: sysDate,
-        hora_registro: sysTime,
-        usuario_registro: currentUser.nombre_usuario,
-        nombre_paciente: nombre.trim(),
-        apellidos_paciente: apellidos.trim(),
-        numero_documento: documento.trim(),
-        eps,
-        medico,
-        tipo_error: '', // Starts empty, registradores register patient regardless of whether they have errors.
-        origen_formula: origen,
-        observaciones: observaciones.trim() || undefined,
-        estado_actual: 'ENTREGADO_QF',
-        historial_estados: [
-          {
-            estado: 'ENTREGADO_QF',
-            fecha: sysDate,
-            hora: sysTime,
-            usuario: currentUser.nombre_usuario,
-          },
-        ],
-        telefono_fijo: telefonoFijo.trim() || undefined,
-        numero_celular: numeroCelular.trim(),
-        celular_contacto_adicional_1: celularContactoAdicional1.trim() || undefined,
-        celular_contacto_adicional_2: celularContactoAdicional2.trim() || undefined,
-        historia_clinica: docsHC,
-        politerapia_monoterapia: docsPM,
-        formula_medica: docsFM,
-        consentimiento_informado: docsCI,
-      };
-
-      onAddError(newRecord);
-      setSuccess(true);
+      setTimeout(() => {
+        setSuccess(false);
+        onNavigate('registros');
+      }, 2000);
+    } catch (err) {
+      console.error('Error al guardar:', err);
+      setErrorMsg('Ocurrió un error al subir los documentos. Intente nuevamente.');
+    } finally {
+      setUploading(false);
     }
-
-    // Reset Form
-    setNombre('');
-    setApellidos('');
-    setDocumento('');
-    setEps('');
-    setMedico('');
-    setObservaciones('');
-    setTelefonoFijo('');
-    setNumeroCelular('');
-    setCelularContactoAdicional1('');
-    setCelularContactoAdicional2('');
-    setHcNotes('');
-    setPmNotes('');
-    setFmNotes('');
-    setCiNotes('');
-    setLastLoadedDoc('');
-    setIsUpdatingExisting(false);
-
-    setTimeout(() => {
-      setSuccess(false);
-      onNavigate('registros');
-    }, 2000);
   };
 
   return (
@@ -460,7 +458,7 @@ export default function NuevoRegistroView({
           <div>
             <h3 className="text-lg font-bold text-[#F3F4F6]">Registrar Fórmula Médica y Paciente</h3>
             <p className="text-xs text-[#9CA3AF]">
-              Ingrese los datos identificativos y adjunte obligatoriamente los 4 documentos exigidos en formato PDF para validación por Farmacia.
+              Ingrese los datos identificativos y adjunte los documentos en formato PDF para validación por Farmacia.
             </p>
           </div>
         </div>
@@ -470,6 +468,13 @@ export default function NuevoRegistroView({
             <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-[#EF4444] text-xs flex items-center gap-2.5">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{errorMsg}</span>
+            </div>
+          )}
+
+          {uploading && (
+            <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 text-[#3B82F6] text-xs flex items-center gap-2.5">
+              <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" />
+              <span>Subiendo documentos a la base de datos segura, por favor espere...</span>
             </div>
           )}
 
@@ -715,7 +720,7 @@ export default function NuevoRegistroView({
           {/* PDF Attachments Section */}
           <div className="space-y-6 pt-2">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-blue-400 border-b border-[#1F2937] pb-1">
-              2. Soportes Médicos Exigidos (Formato PDF)
+              2. Soportes Médicos (Formato PDF)
             </h4>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -725,8 +730,6 @@ export default function NuevoRegistroView({
                   <FileText className="w-4 h-4" />
                   <span>Historia Clínica (PDF) *</span>
                 </div>
-                
-                {/* Real file uploader */}
                 <label 
                   className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer transition bg-[#131B2E]/40 ${
                     dragActiveHC ? 'border-blue-500 bg-[#3B82F6]/10' : 'border-[#1F2937] hover:border-blue-500/50'
@@ -764,7 +767,6 @@ export default function NuevoRegistroView({
                     {hcFile ? `${(hcFile.size / (1024 * 1024)).toFixed(2)} MB (Archivo seleccionado)` : 'Haga clic o arrastre un PDF aquí'}
                   </span>
                 </label>
-
                 <div className="space-y-1">
                   <label className="text-[10px] text-gray-400">Notas sobre la Historia Clínica:</label>
                   <textarea
@@ -784,8 +786,6 @@ export default function NuevoRegistroView({
                   <FileText className="w-4 h-4" />
                   <span>Politerapia o Monoterapia (PDF) *</span>
                 </div>
-                
-                {/* Real file uploader */}
                 <label 
                   className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer transition bg-[#131B2E]/40 ${
                     dragActivePM ? 'border-blue-500 bg-[#3B82F6]/10' : 'border-[#1F2937] hover:border-blue-500/50'
@@ -823,7 +823,6 @@ export default function NuevoRegistroView({
                     {pmFile ? `${(pmFile.size / (1024 * 1024)).toFixed(2)} MB (Archivo seleccionado)` : 'Haga clic o arrastre un PDF aquí'}
                   </span>
                 </label>
-
                 <div className="space-y-1">
                   <label className="text-[10px] text-gray-400">Notas sobre el Esquema/Terapia:</label>
                   <textarea
@@ -843,8 +842,6 @@ export default function NuevoRegistroView({
                   <FileText className="w-4 h-4" />
                   <span>Fórmula Médica (PDF) *</span>
                 </div>
-                
-                {/* Real file uploader */}
                 <label 
                   className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer transition bg-[#131B2E]/40 ${
                     dragActiveFM ? 'border-blue-500 bg-[#3B82F6]/10' : 'border-[#1F2937] hover:border-blue-500/50'
@@ -882,7 +879,6 @@ export default function NuevoRegistroView({
                     {fmFile ? `${(fmFile.size / (1024 * 1024)).toFixed(2)} MB (Archivo seleccionado)` : 'Haga clic o arrastre un PDF aquí'}
                   </span>
                 </label>
-
                 <div className="space-y-1">
                   <label className="text-[10px] text-gray-400">Notas sobre la Fórmula Médica:</label>
                   <textarea
@@ -902,8 +898,6 @@ export default function NuevoRegistroView({
                   <FileText className="w-4 h-4" />
                   <span>Consentimiento Informado (PDF) *</span>
                 </div>
-                
-                {/* Real file uploader */}
                 <label 
                   className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer transition bg-[#131B2E]/40 ${
                     dragActiveCI ? 'border-blue-500 bg-[#3B82F6]/10' : 'border-[#1F2937] hover:border-blue-500/50'
@@ -941,7 +935,6 @@ export default function NuevoRegistroView({
                     {ciFile ? `${(ciFile.size / (1024 * 1024)).toFixed(2)} MB (Archivo seleccionado)` : 'Haga clic o arrastre un PDF aquí'}
                   </span>
                 </label>
-
                 <div className="space-y-1">
                   <label className="text-[10px] text-gray-400">Notas sobre el Consentimiento:</label>
                   <textarea
@@ -950,6 +943,230 @@ export default function NuevoRegistroView({
                     value={ciNotes}
                     onChange={(e) => setCiNotes(e.target.value)}
                     placeholder="Ingrese notas del consentimiento firmado..."
+                    className="w-full bg-[#131B2E] border border-[#1F2937] rounded-lg p-2 text-[11px] text-[#F3F4F6] focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Document 5: Resultados de Laboratorio */}
+              <div className="p-4 bg-[#0B1120] border border-[#1F2937] rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+                  <FileText className="w-4 h-4" />
+                  <span>Resultados de Laboratorio (PDF)</span>
+                </div>
+                <label 
+                  className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer transition bg-[#131B2E]/40 ${
+                    dragActiveLAB ? 'border-blue-500 bg-[#3B82F6]/10' : 'border-[#1F2937] hover:border-blue-500/50'
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); setDragActiveLAB(true); }}
+                  onDragLeave={() => setDragActiveLAB(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragActiveLAB(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.type === 'application/pdf') {
+                      setLabFile(file);
+                      setLabFileName(file.name);
+                    }
+                  }}
+                >
+                  <input
+                    id="lab-file-input"
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setLabFile(file);
+                        setLabFileName(file.name);
+                      }
+                    }}
+                  />
+                  <UploadCloud className={`w-6 h-6 mx-auto mb-1 ${dragActiveLAB ? 'text-blue-400' : 'text-gray-500'}`} />
+                  <span className="text-[11px] text-[#F3F4F6] block font-mono truncate" title={labFileName || 'resultados_laboratorio.pdf'}>
+                    {labFileName || 'resultados_laboratorio.pdf'}
+                  </span>
+                  <span className="text-[10px] text-[#9CA3AF]">
+                    {labFile ? `${(labFile.size / (1024 * 1024)).toFixed(2)} MB (Archivo seleccionado)` : 'Haga clic o arrastre un PDF aquí'}
+                  </span>
+                </label>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400">Notas sobre Resultados de Laboratorio:</label>
+                  <textarea
+                    id="lab-notes-textarea"
+                    rows={2}
+                    value={labNotes}
+                    onChange={(e) => setLabNotes(e.target.value)}
+                    placeholder="Ingrese observaciones de los resultados de laboratorio..."
+                    className="w-full bg-[#131B2E] border border-[#1F2937] rounded-lg p-2 text-[11px] text-[#F3F4F6] focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Document 6: Resultados de Imágenes */}
+              <div className="p-4 bg-[#0B1120] border border-[#1F2937] rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+                  <FileText className="w-4 h-4" />
+                  <span>Resultados de Imágenes (PDF)</span>
+                </div>
+                <label 
+                  className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer transition bg-[#131B2E]/40 ${
+                    dragActiveIMG ? 'border-blue-500 bg-[#3B82F6]/10' : 'border-[#1F2937] hover:border-blue-500/50'
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); setDragActiveIMG(true); }}
+                  onDragLeave={() => setDragActiveIMG(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragActiveIMG(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.type === 'application/pdf') {
+                      setImgFile(file);
+                      setImgFileName(file.name);
+                    }
+                  }}
+                >
+                  <input
+                    id="img-file-input"
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setImgFile(file);
+                        setImgFileName(file.name);
+                      }
+                    }}
+                  />
+                  <UploadCloud className={`w-6 h-6 mx-auto mb-1 ${dragActiveIMG ? 'text-blue-400' : 'text-gray-500'}`} />
+                  <span className="text-[11px] text-[#F3F4F6] block font-mono truncate" title={imgFileName || 'resultados_imagenes.pdf'}>
+                    {imgFileName || 'resultados_imagenes.pdf'}
+                  </span>
+                  <span className="text-[10px] text-[#9CA3AF]">
+                    {imgFile ? `${(imgFile.size / (1024 * 1024)).toFixed(2)} MB (Archivo seleccionado)` : 'Haga clic o arrastre un PDF aquí'}
+                  </span>
+                </label>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400">Notas sobre Resultados de Imágenes:</label>
+                  <textarea
+                    id="img-notes-textarea"
+                    rows={2}
+                    value={imgNotes}
+                    onChange={(e) => setImgNotes(e.target.value)}
+                    placeholder="Ingrese observaciones de los estudios imagenológicos..."
+                    className="w-full bg-[#131B2E] border border-[#1F2937] rounded-lg p-2 text-[11px] text-[#F3F4F6] focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Document 7: Autorización EPS */}
+              <div className="p-4 bg-[#0B1120] border border-[#1F2937] rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+                  <FileText className="w-4 h-4" />
+                  <span>Autorización EPS (PDF)</span>
+                </div>
+                <label 
+                  className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer transition bg-[#131B2E]/40 ${
+                    dragActiveEPS ? 'border-blue-500 bg-[#3B82F6]/10' : 'border-[#1F2937] hover:border-blue-500/50'
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); setDragActiveEPS(true); }}
+                  onDragLeave={() => setDragActiveEPS(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragActiveEPS(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.type === 'application/pdf') {
+                      setEpsFile(file);
+                      setEpsFileName(file.name);
+                    }
+                  }}
+                >
+                  <input
+                    id="eps-file-input"
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setEpsFile(file);
+                        setEpsFileName(file.name);
+                      }
+                    }}
+                  />
+                  <UploadCloud className={`w-6 h-6 mx-auto mb-1 ${dragActiveEPS ? 'text-blue-400' : 'text-gray-500'}`} />
+                  <span className="text-[11px] text-[#F3F4F6] block font-mono truncate" title={epsFileName || 'autorizacion_eps.pdf'}>
+                    {epsFileName || 'autorizacion_eps.pdf'}
+                  </span>
+                  <span className="text-[10px] text-[#9CA3AF]">
+                    {epsFile ? `${(epsFile.size / (1024 * 1024)).toFixed(2)} MB (Archivo seleccionado)` : 'Haga clic o arrastre un PDF aquí'}
+                  </span>
+                </label>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400">Notas sobre la Autorización EPS:</label>
+                  <textarea
+                    id="eps-notes-textarea"
+                    rows={2}
+                    value={epsNotes}
+                    onChange={(e) => setEpsNotes(e.target.value)}
+                    placeholder="Ingrese observaciones sobre la autorización de la EPS..."
+                    className="w-full bg-[#131B2E] border border-[#1F2937] rounded-lg p-2 text-[11px] text-[#F3F4F6] focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Document 8: Otros Documentos */}
+              <div className="p-4 bg-[#0B1120] border border-[#1F2937] rounded-xl space-y-3">
+                <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+                  <FileText className="w-4 h-4" />
+                  <span>Otros Documentos (PDF)</span>
+                </div>
+                <label 
+                  className={`block border border-dashed rounded-lg p-3 text-center cursor-pointer transition bg-[#131B2E]/40 ${
+                    dragActiveOTROS ? 'border-blue-500 bg-[#3B82F6]/10' : 'border-[#1F2937] hover:border-blue-500/50'
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); setDragActiveOTROS(true); }}
+                  onDragLeave={() => setDragActiveOTROS(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragActiveOTROS(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.type === 'application/pdf') {
+                      setOtrosFile(file);
+                      setOtrosFileName(file.name);
+                    }
+                  }}
+                >
+                  <input
+                    id="otros-file-input"
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setOtrosFile(file);
+                        setOtrosFileName(file.name);
+                      }
+                    }}
+                  />
+                  <UploadCloud className={`w-6 h-6 mx-auto mb-1 ${dragActiveOTROS ? 'text-blue-400' : 'text-gray-500'}`} />
+                  <span className="text-[11px] text-[#F3F4F6] block font-mono truncate" title={otrosFileName || 'otros_documentos.pdf'}>
+                    {otrosFileName || 'otros_documentos.pdf'}
+                  </span>
+                  <span className="text-[10px] text-[#9CA3AF]">
+                    {otrosFile ? `${(otrosFile.size / (1024 * 1024)).toFixed(2)} MB (Archivo seleccionado)` : 'Haga clic o arrastre un PDF aquí'}
+                  </span>
+                </label>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-gray-400">Notas sobre Otros Documentos:</label>
+                  <textarea
+                    id="otros-notes-textarea"
+                    rows={2}
+                    value={otrosNotes}
+                    onChange={(e) => setOtrosNotes(e.target.value)}
+                    placeholder="Ingrese cualquier otra observación relevante..."
                     className="w-full bg-[#131B2E] border border-[#1F2937] rounded-lg p-2 text-[11px] text-[#F3F4F6] focus:border-blue-500 outline-none"
                   />
                 </div>
@@ -988,17 +1205,28 @@ export default function NuevoRegistroView({
               id="cancel-form-btn"
               type="button"
               onClick={() => onNavigate('dashboard')}
-              className="px-4 py-2 bg-transparent text-xs text-[#9CA3AF] hover:text-[#F3F4F6] border border-[#1F2937] rounded-lg transition"
+              disabled={uploading}
+              className="px-4 py-2 bg-transparent text-xs text-[#9CA3AF] hover:text-[#F3F4F6] border border-[#1F2937] rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancelar
             </button>
             <button
               id="submit-form-btn"
               type="submit"
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white rounded-lg shadow-md transition flex items-center gap-2"
+              disabled={uploading}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white rounded-lg shadow-md transition flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <FileUp className="w-4 h-4" />
-              Guardar Paciente y Documentos (PDF)
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Subiendo...
+                </>
+              ) : (
+                <>
+                  <FileUp className="w-4 h-4" />
+                  Guardar Paciente y Documentos (PDF)
+                </>
+              )}
             </button>
           </div>
         </form>

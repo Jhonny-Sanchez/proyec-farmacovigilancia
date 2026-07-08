@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-
+import { fetchErrores, insertError, updateError } from './dataService';
 import React, { useState, useEffect } from 'react';
 import {
   Usuario,
@@ -142,6 +142,13 @@ export default function App() {
       localStorage.removeItem('onco_current_user');
     }
   }, [currentUser]);
+  useEffect(() => {
+  fetchErrores().then((data) => {
+    if (data.length > 0) {
+      setErrors(data);
+    }
+  });
+}, []);
 
   // Operational scheduling handlers
   const handleAddProgramacion = (newProg: ProgramacionCita) => {
@@ -305,50 +312,62 @@ export default function App() {
 
   // Add error from New Record form
   const handleAddError = (newError: RegistroError) => {
-    setErrors((prev) => [newError, ...prev]);
-    addAuditLog('Reporte de Error', `Registró con éxito el error ${newError.id_registro} de ${newError.nombre_paciente} ${newError.apellidos_paciente}.`);
-  };
+  setErrors((prev) => [newError, ...prev]);
+  insertError(newError); // <-- agrega esta línea
+  addAuditLog('Reporte de Error', `Registró con éxito el error ${newError.id_registro} de ${newError.nombre_paciente} ${newError.apellidos_paciente}.`);
+};
 
   // Update validation state transitions
   const handleUpdateErrorStatus = (
-    id: string,
-    newStatus: ErrorStatus,
-    updatedFields?: Partial<RegistroError>
-  ) => {
-    let oldStatus: ErrorStatus | null = null;
-    setErrors((prev) =>
-      prev.map((err) => {
-        if (err.id_registro === id) {
-          oldStatus = err.estado_actual;
-          const statusChanged = newStatus !== err.estado_actual;
-          const updatedHistory = statusChanged
-            ? [
-                ...err.historial_estados,
-                {
-                  estado: newStatus,
-                  fecha: new Date().toISOString().split('T')[0],
-                  hora: new Date().toTimeString().split(' ')[0],
-                  usuario: currentUser ? currentUser.nombre_usuario : 'Sistema',
-                },
-              ]
-            : err.historial_estados;
-          return {
-            ...err,
-            estado_actual: newStatus,
-            historial_estados: updatedHistory,
-            ...(updatedFields || {}),
-          };
-        }
-        return err;
-      })
-    );
+  id: string,
+  newStatus: ErrorStatus,
+  updatedFields?: Partial<RegistroError>
+) => {
+  let oldStatus: ErrorStatus | null = null;
+  let historialActualizado: any = null;
 
-    if (oldStatus && newStatus !== oldStatus) {
-      addAuditLog('Trazabilidad Estado', `Avanzó el estado del registro ${id} hacia la fase: ${newStatus}.`);
-    } else {
-      addAuditLog('Modificación Registro', `Se actualizaron datos o documentos del paciente ${id}.`);
-    }
-  };
+  setErrors((prev) =>
+    prev.map((err) => {
+      if (err.id_registro === id) {
+        oldStatus = err.estado_actual;
+        const statusChanged = newStatus !== err.estado_actual;
+        const updatedHistory = statusChanged
+          ? [
+              ...err.historial_estados,
+              {
+                estado: newStatus,
+                fecha: new Date().toISOString().split('T')[0],
+                hora: new Date().toTimeString().split(' ')[0],
+                usuario: currentUser ? currentUser.nombre_usuario : 'Sistema',
+              },
+            ]
+          : err.historial_estados;
+
+        historialActualizado = updatedHistory;
+
+        return {
+          ...err,
+          estado_actual: newStatus,
+          historial_estados: updatedHistory,
+          ...(updatedFields || {}),
+        };
+      }
+      return err;
+    })
+  );
+
+  updateError(id, {
+    estado_actual: newStatus,
+    historial_estados: historialActualizado,
+    ...(updatedFields || {}),
+  });
+
+  if (oldStatus && newStatus !== oldStatus) {
+    addAuditLog('Trazabilidad Estado', `Avanzó el estado del registro ${id} hacia la fase: ${newStatus}.`);
+  } else {
+    addAuditLog('Modificación Registro', `Se actualizaron datos o documentos del paciente ${id}.`);
+  }
+};
 
   // Create new user account (Admin only)
   const handleAddUser = (newUser: Usuario) => {
