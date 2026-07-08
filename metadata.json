@@ -1,0 +1,6 @@
+{
+  "name": "Registro Farmacovigilancia en Oncología",
+  "description": "Sistema de Trazabilidad de Errores en Fórmulas Médicas para registrar, dar seguimiento y analizar errores detectados en fórmulas médicas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
