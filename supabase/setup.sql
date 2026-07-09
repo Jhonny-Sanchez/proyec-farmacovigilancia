@@ -76,58 +76,67 @@ create table if not exists medicos (
 -- Principio: la clave pública (anon) solo puede hacer lo que la app
 -- necesita. Todo lo demás queda bloqueado.
 
--- ---- registros_error: leer, crear y actualizar. PROHIBIDO borrar. ----
+-- Activar RLS en las 6 tablas
 alter table registros_error enable row level security;
-drop policy if exists "registros_select" on registros_error;
-drop policy if exists "registros_insert" on registros_error;
-drop policy if exists "registros_update" on registros_error;
+alter table usuarios enable row level security;
+alter table programaciones_citas enable row level security;
+alter table volumenes_formulas enable row level security;
+alter table audit_logs enable row level security;
+alter table medicos enable row level security;
+
+-- Eliminar TODAS las políticas existentes de estas tablas (incluidas
+-- políticas viejas "permitir todo" creadas por configuraciones previas)
+do $$
+declare pol record;
+begin
+  for pol in
+    select policyname, tablename from pg_policies
+    where schemaname = 'public'
+      and tablename in ('registros_error','usuarios','programaciones_citas',
+                        'volumenes_formulas','audit_logs','medicos')
+  loop
+    execute format('drop policy %I on %I', pol.policyname, pol.tablename);
+  end loop;
+end $$;
+
+-- ---- registros_error: leer, crear y actualizar. PROHIBIDO borrar. ----
 create policy "registros_select" on registros_error for select to anon, authenticated using (true);
 create policy "registros_insert" on registros_error for insert to anon, authenticated with check (true);
 create policy "registros_update" on registros_error for update to anon, authenticated using (true) with check (true);
 -- (sin política de delete: nadie puede borrar registros con la clave pública)
 
 -- ---- usuarios: leer, crear y actualizar. PROHIBIDO borrar. ----
-alter table usuarios enable row level security;
-drop policy if exists "usuarios_select" on usuarios;
-drop policy if exists "usuarios_insert" on usuarios;
-drop policy if exists "usuarios_update" on usuarios;
 create policy "usuarios_select" on usuarios for select to anon, authenticated using (true);
 create policy "usuarios_insert" on usuarios for insert to anon, authenticated with check (true);
 create policy "usuarios_update" on usuarios for update to anon, authenticated using (true) with check (true);
 
 -- ---- programaciones_citas: operación completa (la app permite eliminar citas). ----
-alter table programaciones_citas enable row level security;
-drop policy if exists "prog_select" on programaciones_citas;
-drop policy if exists "prog_insert" on programaciones_citas;
-drop policy if exists "prog_update" on programaciones_citas;
-drop policy if exists "prog_delete" on programaciones_citas;
 create policy "prog_select" on programaciones_citas for select to anon, authenticated using (true);
 create policy "prog_insert" on programaciones_citas for insert to anon, authenticated with check (true);
 create policy "prog_update" on programaciones_citas for update to anon, authenticated using (true) with check (true);
 create policy "prog_delete" on programaciones_citas for delete to anon, authenticated using (true);
 
 -- ---- volumenes_formulas: leer y crear. Sin modificar ni borrar. ----
-alter table volumenes_formulas enable row level security;
-drop policy if exists "vol_select" on volumenes_formulas;
-drop policy if exists "vol_insert" on volumenes_formulas;
 create policy "vol_select" on volumenes_formulas for select to anon, authenticated using (true);
 create policy "vol_insert" on volumenes_formulas for insert to anon, authenticated with check (true);
 
 -- ---- audit_logs: INMUTABLE. Solo leer y agregar; imposible editar o borrar. ----
-alter table audit_logs enable row level security;
-drop policy if exists "audit_select" on audit_logs;
-drop policy if exists "audit_insert" on audit_logs;
 create policy "audit_select" on audit_logs for select to anon, authenticated using (true);
 create policy "audit_insert" on audit_logs for insert to anon, authenticated with check (true);
 
 -- ---- medicos: catálogo administrable. ----
-alter table medicos enable row level security;
-drop policy if exists "medicos_select" on medicos;
-drop policy if exists "medicos_insert" on medicos;
-drop policy if exists "medicos_delete" on medicos;
 create policy "medicos_select" on medicos for select to anon, authenticated using (true);
 create policy "medicos_insert" on medicos for insert to anon, authenticated with check (true);
 create policy "medicos_delete" on medicos for delete to anon, authenticated using (true);
+
+-- ============ VERIFICACIÓN ============
+-- Al terminar debe mostrar rls_activo = true en las 6 tablas.
+select tablename as tabla, rowsecurity as rls_activo
+from pg_tables
+where schemaname = 'public'
+  and tablename in ('registros_error','usuarios','programaciones_citas',
+                    'volumenes_formulas','audit_logs','medicos')
+order by tablename;
 
 -- ============ 3. STORAGE (bucket "documentos") ============
 -- Ya está restringido: subir y leer permitido, borrar bloqueado.
