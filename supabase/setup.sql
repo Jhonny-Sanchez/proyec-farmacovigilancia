@@ -7,7 +7,41 @@
 --   Es idempotente: se puede ejecutar varias veces sin dañar datos.
 -- ============================================================
 
--- ============ 1. TABLAS NUEVAS ============
+-- ============ 1. TABLAS ============
+
+-- Tabla principal (en instalaciones existentes ya está creada; esto solo
+-- aplica al montar el sistema en un proyecto de Supabase nuevo).
+create table if not exists registros_error (
+  id_registro text primary key,
+  fecha_registro text not null,
+  hora_registro text not null,
+  usuario_registro text not null,
+  nombre_paciente text not null,
+  apellidos_paciente text not null,
+  numero_documento text not null,
+  eps text not null,
+  medico text not null,
+  tipo_error text,
+  origen_formula text not null,
+  observaciones text,
+  estado_actual text not null,
+  historial_estados jsonb not null default '[]'::jsonb,
+  telefono_fijo text,
+  numero_celular text,
+  celular_contacto_adicional_1 text,
+  celular_contacto_adicional_2 text,
+  historia_clinica jsonb not null default '[]'::jsonb,
+  politerapia_monoterapia jsonb not null default '[]'::jsonb,
+  formula_medica jsonb not null default '[]'::jsonb,
+  consentimiento_informado jsonb not null default '[]'::jsonb,
+  resultados_laboratorio jsonb not null default '[]'::jsonb,
+  resultados_imagenes jsonb not null default '[]'::jsonb,
+  autorizacion_eps jsonb not null default '[]'::jsonb,
+  otros_documentos jsonb not null default '[]'::jsonb,
+  cantidad_ciclos integer,
+  dias_administracion text,
+  creado_en timestamptz not null default now()
+);
 
 create table if not exists usuarios (
   id_usuario text primary key,

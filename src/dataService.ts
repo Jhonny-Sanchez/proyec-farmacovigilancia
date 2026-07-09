@@ -294,7 +294,18 @@ export async function limpiarPdfsVencidos(): Promise<void> {
         );
       }
     }
-    await supabase.from('registros_error').update(campos).eq('id_registro', registro.id_registro);
+    const { error: errActualizacion } = await supabase
+      .from('registros_error')
+      .update(campos)
+      .eq('id_registro', registro.id_registro);
+    if (errActualizacion) {
+      console.error(
+        'Retención documental: los PDF se eliminaron pero no se pudieron actualizar las referencias de',
+        registro.id_registro,
+        errActualizacion
+      );
+      continue; // no registrar en auditoría una limpieza incompleta
+    }
 
     const ahora = new Date();
     await insertAuditLog({
@@ -345,7 +356,7 @@ export async function subirPDF(file: File, idRegistro: string, tipo: string): Pr
 
   const { error } = await supabase.storage
     .from('documentos')
-    .upload(ruta, file);
+    .upload(ruta, file, { contentType: file.type || 'application/pdf' });
 
   if (error) {
     console.error('Error al subir PDF:', error);

@@ -246,6 +246,11 @@ export default function NuevoRegistroView({
     if (!file) return []; // Si no hay archivo, no se crea documento
 
     const ruta = await subirPDF(file, idRegistro, tipo);
+    if (!ruta) {
+      // Si la subida falla, se aborta todo el guardado: así nunca queda un
+      // registro "exitoso" con documentos sin archivo real en la nube.
+      throw new Error(`No se pudo subir el archivo "${fileName || file.name}" a la nube.`);
+    }
 
     const doc: DocumentoAdjunto = {
       id_documento: `${prefijo}-${Date.now()}`,
@@ -255,7 +260,7 @@ export default function NuevoRegistroView({
       cargado_por: currentUser.nombre_usuario,
       notas: notes.trim() || contexto,
       es_correccion: false,
-      url: ruta || undefined, // Guardamos la RUTA de Supabase Storage
+      url: ruta, // Guardamos la RUTA de Supabase Storage
     };
     return [doc];
   };

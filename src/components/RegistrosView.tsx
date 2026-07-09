@@ -11,7 +11,7 @@ import {
   UserRole,
   DocumentoAdjunto,
 } from '../types';
-import { obtenerEnlacePDF } from '../dataService';
+import { obtenerEnlacePDF, subirPDF } from '../dataService';
 import { fechaLocalISO } from '../utils';
 import PdfAnnotatorModal from './PdfAnnotatorModal';
 import {
@@ -111,6 +111,8 @@ export default function RegistrosView({
   const [newDocFileName, setNewDocFileName] = useState('');
   const [newDocNotes, setNewDocNotes] = useState('');
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
+  const [attachUploading, setAttachUploading] = useState(false);
+  const [attachError, setAttachError] = useState('');
   const [dragActiveAdd, setDragActiveAdd] = useState(false);
 
   // Visor de PDF real
@@ -150,6 +152,13 @@ export default function RegistrosView({
 
     if (!doc.url) {
       setViewerError('Este documento no tiene un archivo PDF asociado.');
+      return;
+    }
+
+    if (doc.url.startsWith('blob:')) {
+      // Documento adjuntado con una versión anterior de la app que no lo
+      // subía a la nube: el archivo nunca quedó guardado.
+      setViewerError('Este documento se adjuntó con una versión anterior y el archivo no quedó guardado en la nube. Por favor adjúntelo nuevamente con "Adjuntar Corrección / Soporte".');
       return;
     }
 
@@ -251,12 +260,27 @@ export default function RegistrosView({
   };
 
   // Document attachment handler (Correcciones / Soportes)
-  const handleAddDocumentAttachment = (e: React.FormEvent) => {
+  // Sube el archivo a Supabase Storage y guarda la RUTA permanente.
+  const handleAddDocumentAttachment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedError || !newDocFileName.trim()) return;
 
-    let computedSize = '1.2 MB';
-    if (newDocFile) {
+    if (!newDocFile) {
+      setAttachError('Seleccione el archivo PDF que desea adjuntar.');
+      return;
+    }
+
+    setAttachError('');
+    setAttachUploading(true);
+
+    try {
+      const ruta = await subirPDF(newDocFile, selectedError.id_registro, newDocCategory);
+      if (!ruta) {
+        setAttachError('No se pudo subir el archivo a la nube. Verifique su conexión e intente nuevamente.');
+        return;
+      }
+
+      let computedSize = '1.2 MB';
       if (newDocFile.size < 1024) {
         computedSize = `${newDocFile.size} B`;
       } else if (newDocFile.size < 1024 * 1024) {
@@ -264,36 +288,38 @@ export default function RegistrosView({
       } else {
         computedSize = `${(newDocFile.size / (1024 * 1024)).toFixed(1)} MB`;
       }
+
+      const newDoc: DocumentoAdjunto = {
+        id_documento: `DOC-ADD-${Date.now()}`,
+        nombre_archivo: newDocFileName.trim(),
+        tamano: computedSize,
+        fecha_carga: fechaLocalISO(),
+        cargado_por: currentUser.nombre_usuario,
+        notas: newDocNotes.trim() || 'Documento correctivo cargado.',
+        es_correccion: true,
+        url: ruta,
+      };
+
+      const currentArray = (selectedError[newDocCategory] as DocumentoAdjunto[]) || [];
+      const updatedArray = [...currentArray, newDoc];
+
+      const updatedFields: Partial<RegistroError> = {
+        [newDocCategory]: updatedArray,
+      };
+
+      onUpdateErrorStatus(selectedError.id_registro, selectedError.estado_actual, updatedFields);
+
+      onSelectError({
+        ...selectedError,
+        ...updatedFields,
+      });
+
+      setNewDocNotes('');
+      setNewDocFile(null);
+      setShowAttachForm(false);
+    } finally {
+      setAttachUploading(false);
     }
-
-    const newDoc: DocumentoAdjunto = {
-      id_documento: `DOC-ADD-${Date.now()}`,
-      nombre_archivo: newDocFileName.trim(),
-      tamano: computedSize,
-      fecha_carga: fechaLocalISO(),
-      cargado_por: currentUser.nombre_usuario,
-      notas: newDocNotes.trim() || 'Documento correctivo cargado.',
-      es_correccion: true,
-      url: newDocFile ? URL.createObjectURL(newDocFile) : undefined,
-    };
-
-    const currentArray = (selectedError[newDocCategory] as DocumentoAdjunto[]) || [];
-    const updatedArray = [...currentArray, newDoc];
-
-    const updatedFields: Partial<RegistroError> = {
-      [newDocCategory]: updatedArray,
-    };
-
-    onUpdateErrorStatus(selectedError.id_registro, selectedError.estado_actual, updatedFields);
-
-    onSelectError({
-      ...selectedError,
-      ...updatedFields,
-    });
-
-    setNewDocNotes('');
-    setNewDocFile(null);
-    setShowAttachForm(false);
   };
 
   // Delete Document (ADMIN ONLY)
@@ -863,9 +889,8 @@ export default function RegistrosView({
                         rows={2}
                         value={newDocNotes}
                         onChange={(e) => setNewDocNotes(e.target.value)}
-                        placeholder="Escriba aquí los detalles corregidos o comentarios de esta nueva versión del documento..."
+                        placeholder="Escriba aquí los detalles corregidos o comentarios de esta nueva versión del documento... (opcional)"
                         className="w-full bg-[#131B2E] border border-[#1F2937] p-2 rounded text-xs text-white"
-                        required
                       />
                     </div>
 
@@ -879,12 +904,19 @@ export default function RegistrosView({
                       </button>
                       <button
                         type="submit"
-                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition flex items-center gap-1.5"
+                        disabled={attachUploading}
+                        className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-bold transition flex items-center gap-1.5 disabled:opacity-50"
                       >
-                        <CheckCircle className="w-4 h-4" />
-                        Cargar Documento
+                        {attachUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                        {attachUploading ? 'Subiendo...' : 'Cargar Documento'}
                       </button>
                     </div>
+                    {attachError && (
+                      <div className="p-2.5 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[11px] flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{attachError}</span>
+                      </div>
+                    )}
                   </form>
                 )}
 
