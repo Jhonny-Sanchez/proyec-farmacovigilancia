@@ -4,6 +4,7 @@
  */
 
 import React, { useState } from 'react';
+import { fechaLocalISO } from '../utils';
 import {
   Calendar,
   Clock,
@@ -178,7 +179,7 @@ export default function ProgramacionCitasView({
       medicamento: medicamento.trim(),
       observaciones: observaciones.trim(),
       estado_programacion: 'Programada',
-      fecha_registro: new Date().toISOString().split('T')[0],
+      fecha_registro: fechaLocalISO(),
       programado_por: currentUser.nombre_usuario,
       confirmacion_paciente: 'Pendiente',
       sms_enviado: true,

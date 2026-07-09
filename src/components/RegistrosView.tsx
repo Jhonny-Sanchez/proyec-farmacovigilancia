@@ -13,6 +13,7 @@ import {
   DocumentoAdjunto,
 } from '../types';
 import { obtenerEnlacePDF } from '../dataService';
+import { fechaLocalISO } from '../utils';
 import {
   Search,
   CheckCircle,
@@ -233,7 +234,7 @@ export default function RegistrosView({
         ...record.historial_estados,
         {
           estado: targetStatus,
-          fecha: new Date().toISOString().split('T')[0],
+          fecha: fechaLocalISO(),
           hora: new Date().toTimeString().split(' ')[0],
           usuario: currentUser.nombre_usuario,
         },
@@ -262,7 +263,7 @@ export default function RegistrosView({
       id_documento: `DOC-ADD-${Date.now()}`,
       nombre_archivo: newDocFileName.trim(),
       tamano: computedSize,
-      fecha_carga: new Date().toISOString().split('T')[0],
+      fecha_carga: fechaLocalISO(),
       cargado_por: currentUser.nombre_usuario,
       notas: newDocNotes.trim() || 'Documento correctivo cargado.',
       es_correccion: true,

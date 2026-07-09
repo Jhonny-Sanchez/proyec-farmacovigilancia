@@ -91,7 +91,11 @@ export const INITIAL_ERRORS: RegistroError[] = [
     ],
     consentimiento_informado: [
       { id_documento: 'DOC-123-4', nombre_archivo: 'consentimiento_informado_firmado.pdf', tamano: '2.3 MB', fecha_carga: '2026-06-25', cargado_por: 'jregente01', notas: 'Consentimiento informado firmado por la paciente y testigo.' }
-    ]
+    ],
+    resultados_laboratorio: [],
+    resultados_imagenes: [],
+    autorizacion_eps: [],
+    otros_documentos: []
   },
   {
     id_registro: 'ERR-2026-000124',
@@ -125,7 +129,11 @@ export const INITIAL_ERRORS: RegistroError[] = [
     ],
     consentimiento_informado: [
       { id_documento: 'DOC-124-4', nombre_archivo: 'consentimiento_rituximab.pdf', tamano: '1.9 MB', fecha_carga: '2026-06-26', cargado_por: 'jregente01', notas: 'Consentimiento para terapia biológica.' }
-    ]
+    ],
+    resultados_laboratorio: [],
+    resultados_imagenes: [],
+    autorizacion_eps: [],
+    otros_documentos: []
   },
   {
     id_registro: 'ERR-2026-000125',
@@ -156,7 +164,11 @@ export const INITIAL_ERRORS: RegistroError[] = [
     ],
     consentimiento_informado: [
       { id_documento: 'DOC-125-4', nombre_archivo: 'consentimiento_terapia_firmado.pdf', tamano: '2.0 MB', fecha_carga: '2026-06-27', cargado_por: 'admin', notas: 'Consentimiento legal de tratamiento.' }
-    ]
+    ],
+    resultados_laboratorio: [],
+    resultados_imagenes: [],
+    autorizacion_eps: [],
+    otros_documentos: []
   },
   {
     id_registro: 'ERR-2026-000126',
@@ -186,7 +198,11 @@ export const INITIAL_ERRORS: RegistroError[] = [
     ],
     consentimiento_informado: [
       { id_documento: 'DOC-126-4', nombre_archivo: 'consentimiento_informado_pedro.pdf', tamano: '1.8 MB', fecha_carga: '2026-06-28', cargado_por: 'jregente01', notas: 'Consentimiento firmado.' }
-    ]
+    ],
+    resultados_laboratorio: [],
+    resultados_imagenes: [],
+    autorizacion_eps: [],
+    otros_documentos: []
   },
   {
     id_registro: 'ERR-2026-000127',
@@ -219,7 +235,11 @@ export const INITIAL_ERRORS: RegistroError[] = [
     ],
     consentimiento_informado: [
       { id_documento: 'DOC-127-4', nombre_archivo: 'consentimiento_martha_duque.pdf', tamano: '2.1 MB', fecha_carga: '2026-06-29', cargado_por: 'jregente01', notas: 'Consentimiento para Pembrolizumab.' }
-    ]
+    ],
+    resultados_laboratorio: [],
+    resultados_imagenes: [],
+    autorizacion_eps: [],
+    otros_documentos: []
   },
   {
     id_registro: 'ERR-2026-000128',
@@ -249,7 +269,11 @@ export const INITIAL_ERRORS: RegistroError[] = [
     ],
     consentimiento_informado: [
       { id_documento: 'DOC-128-4', nombre_archivo: 'consentimiento_gabriel.pdf', tamano: '1.9 MB', fecha_carga: '2026-06-30', cargado_por: 'jregente01', notas: 'Consentimiento informado del paciente.' }
-    ]
+    ],
+    resultados_laboratorio: [],
+    resultados_imagenes: [],
+    autorizacion_eps: [],
+    otros_documentos: []
   }
 ];
 

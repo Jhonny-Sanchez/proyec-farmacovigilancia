@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { VolumenFormulas, EPS_CATALOG, MEDICOS_CATALOG } from '../types';
+import { fechaLocalISO } from '../utils';
 import { Settings, Plus, Layers, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 interface ConfiguracionViewProps {
@@ -23,7 +24,7 @@ export default function ConfiguracionView({
   medicos = MEDICOS_CATALOG,
 }: ConfiguracionViewProps) {
   // Form states
-  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => fechaLocalISO());
   const [eps, setEps] = useState('');
   const [medico, setMedico] = useState('');
   const [quantity, setQuantity] = useState('');

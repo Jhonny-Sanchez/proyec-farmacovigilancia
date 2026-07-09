@@ -1,20 +1,51 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Registro de Farmacovigilancia en Oncología
 
-# Run and deploy your AI Studio app
+Sistema de trazabilidad de errores en fórmulas médicas oncológicas: registro de errores, seguimiento por estados (Registro → Químico Farmacéutico → Programación), carga de documentos PDF, programación de citas de aplicación, reportes y auditoría.
 
-This contains everything you need to run your app locally.
+**Stack:** React 19 + TypeScript + Vite + Tailwind CSS 4 + Supabase (base de datos y almacenamiento de PDFs).
 
-View your app in AI Studio: https://ai.studio/apps/70262f3f-d645-46b5-8f1a-fe95e18b1ec9
+## Requisitos
 
-## Run Locally
+- Node.js 18 o superior
+- Un proyecto de Supabase con:
+  - Tabla `registros_error` (columnas equivalentes a la interfaz `RegistroError` de [src/types.ts](src/types.ts), con `historial_estados` y las listas de documentos como `jsonb`, y `creado_en timestamptz default now()`)
+  - Bucket de Storage llamado `documentos`
 
-**Prerequisites:**  Node.js
+## Configuración local
 
+1. Instalar dependencias:
+   ```
+   npm install
+   ```
+2. Crear un archivo `.env` en la raíz (ver [.env.example](.env.example)):
+   ```
+   VITE_SUPABASE_URL=https://TU_PROYECTO.supabase.co
+   VITE_SUPABASE_ANON_KEY=TU_CLAVE_PUBLISHABLE
+   ```
+3. Ejecutar en desarrollo:
+   ```
+   npm run dev
+   ```
+   La app queda en http://localhost:3000
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Verificación y build de producción
+
+```
+npm run lint    # verificación de tipos (tsc)
+npm run build   # genera la carpeta dist/
+```
+
+La carpeta `dist/` es un sitio estático: se puede desplegar en Vercel, Netlify, o cualquier servidor web interno. En el servicio de hosting hay que configurar las mismas variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` antes de hacer el build.
+
+## Qué se guarda en Supabase
+
+- **Registros de error** (`registros_error`): creación, cambios de estado con historial y documentos adjuntos.
+- **PDFs** (bucket `documentos`): se suben con ruta `id_registro/tipo/timestamp_nombre.pdf` y se leen mediante enlaces firmados temporales (5 minutos).
+
+Los usuarios, citas, denominadores y audit log se guardan por ahora en `localStorage` del navegador.
+
+## Pendientes recomendados antes de uso productivo
+
+1. **Restringir RLS en Supabase**: actualmente la clave pública permite insertar, leer, actualizar y borrar en `registros_error`. Se recomienda activar políticas que limiten borrado/actualización a usuarios autenticados.
+2. **Autenticación real**: el login actual es simulado (usuarios y contraseñas en el código/localStorage). Migrar a Supabase Auth.
+3. **Migrar a Supabase** usuarios, citas, denominadores y audit log para que sean compartidos entre equipos.

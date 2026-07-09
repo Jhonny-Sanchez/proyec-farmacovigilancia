@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { Usuario, ROLES_CATALOG, UserRole, AccountStatus } from '../types';
+import { fechaLocalISO } from '../utils';
 import { Users, Plus, Shield, CheckCircle2, XCircle, ArrowLeft, Trash2, Edit, Stethoscope } from 'lucide-react';
 
 interface UsuariosViewProps {
@@ -86,7 +87,7 @@ export default function UsuariosView({
       contrasena: password,
       rol: role,
       estado_cuenta: 'Activo',
-      fecha_creacion: new Date().toISOString().split('T')[0],
+      fecha_creacion: fechaLocalISO(),
       creado_por: currentUser.nombre_usuario,
     };
 

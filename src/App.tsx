@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { fetchErrores, insertError, updateError } from './dataService';
+import { fechaLocalISO } from './utils';
 import React, { useState, useEffect } from 'react';
 import {
   Usuario,
@@ -258,11 +259,11 @@ export default function App() {
     // Write audit trail
     const tempUser = matched.nombre_usuario;
     const now = new Date();
-    const logTime = `${now.toISOString().split('T')[0]} ${now.toTimeString().split(' ')[0]}`;
+    const logTime = `${fechaLocalISO(now)} ${now.toTimeString().split(' ')[0]}`;
     // Directly append log using current values to avoid waiting state cycle
     const newLog: AuditLog = {
       id: `LOG-${String(auditLogs.length + 1).padStart(3, '0')}`,
-      fecha: now.toISOString().split('T')[0],
+      fecha: fechaLocalISO(now),
       hora: now.toTimeString().split(' ')[0],
       usuario: tempUser,
       accion: 'Sesión Iniciada',
@@ -290,7 +291,7 @@ export default function App() {
         const now = new Date();
         const newLog: AuditLog = {
           id: `LOG-${String(auditLogs.length + 1).padStart(3, '0')}`,
-          fecha: now.toISOString().split('T')[0],
+          fecha: fechaLocalISO(now),
           hora: now.toTimeString().split(' ')[0],
           usuario: matched.nombre_usuario,
           accion: 'Sesión Iniciada',
@@ -313,7 +314,7 @@ export default function App() {
   // Add error from New Record form
   const handleAddError = (newError: RegistroError) => {
   setErrors((prev) => [newError, ...prev]);
-  insertError(newError); // <-- agrega esta línea
+  insertError(newError);
   addAuditLog('Reporte de Error', `Registró con éxito el error ${newError.id_registro} de ${newError.nombre_paciente} ${newError.apellidos_paciente}.`);
 };
 
@@ -323,46 +324,38 @@ export default function App() {
   newStatus: ErrorStatus,
   updatedFields?: Partial<RegistroError>
 ) => {
-  let oldStatus: ErrorStatus | null = null;
-  let historialActualizado: any = null;
+  const target = errors.find((err) => err.id_registro === id);
+  if (!target) return;
 
-  setErrors((prev) =>
-    prev.map((err) => {
-      if (err.id_registro === id) {
-        oldStatus = err.estado_actual;
-        const statusChanged = newStatus !== err.estado_actual;
-        const updatedHistory = statusChanged
-          ? [
-              ...err.historial_estados,
-              {
-                estado: newStatus,
-                fecha: new Date().toISOString().split('T')[0],
-                hora: new Date().toTimeString().split(' ')[0],
-                usuario: currentUser ? currentUser.nombre_usuario : 'Sistema',
-              },
-            ]
-          : err.historial_estados;
+  const statusChanged = newStatus !== target.estado_actual;
+  const updatedHistory = statusChanged
+    ? [
+        ...target.historial_estados,
+        {
+          estado: newStatus,
+          fecha: fechaLocalISO(),
+          hora: new Date().toTimeString().split(' ')[0],
+          usuario: currentUser ? currentUser.nombre_usuario : 'Sistema',
+        },
+      ]
+    : target.historial_estados;
 
-        historialActualizado = updatedHistory;
+  const updatedRecord: RegistroError = {
+    ...target,
+    estado_actual: newStatus,
+    historial_estados: updatedHistory,
+    ...(updatedFields || {}),
+  };
 
-        return {
-          ...err,
-          estado_actual: newStatus,
-          historial_estados: updatedHistory,
-          ...(updatedFields || {}),
-        };
-      }
-      return err;
-    })
-  );
+  setErrors((prev) => prev.map((err) => (err.id_registro === id ? updatedRecord : err)));
 
   updateError(id, {
     estado_actual: newStatus,
-    historial_estados: historialActualizado,
+    historial_estados: updatedHistory,
     ...(updatedFields || {}),
   });
 
-  if (oldStatus && newStatus !== oldStatus) {
+  if (statusChanged) {
     addAuditLog('Trazabilidad Estado', `Avanzó el estado del registro ${id} hacia la fase: ${newStatus}.`);
   } else {
     addAuditLog('Modificación Registro', `Se actualizaron datos o documentos del paciente ${id}.`);
