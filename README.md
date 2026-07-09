@@ -48,6 +48,8 @@ Todo el estado de la aplicación se guarda en Supabase y se comparte entre equip
 - **Audit log** (`audit_logs`): inmutable — las políticas RLS impiden editarlo o borrarlo.
 - **PDFs** (bucket `documentos`): se suben con ruta `id_registro/tipo/timestamp_nombre.pdf` y se leen mediante enlaces firmados temporales (5 minutos).
 
+**Retención documental:** los archivos PDF se eliminan automáticamente del Storage 4 meses después de que el registro queda gestionado en su totalidad (estado "Aprobada - Proceso Finalizado"). La limpieza corre al abrir la app, deja la tarjeta del documento con una nota explicativa y registra la acción en el audit log. La política RLS del bucket solo permite borrar exactamente esos archivos.
+
 `localStorage` se usa solo como caché/respaldo local si Supabase no responde. La sesión activa es local de cada navegador.
 
 ## Pendientes recomendados antes de uso productivo

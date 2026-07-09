@@ -29,6 +29,7 @@ import {
   fetchProtocolos,
   insertProtocolo,
   deleteProtocolo,
+  limpiarPdfsVencidos,
 } from './dataService';
 import { fechaLocalISO } from './utils';
 import React, { useState, useEffect } from 'react';
@@ -193,8 +194,12 @@ export default function App() {
   // Cargar todos los datos desde Supabase al iniciar.
   // Si una tabla está vacía o aún no existe, se conserva el respaldo local.
   useEffect(() => {
-    fetchErrores().then((data) => {
-      if (data.length > 0) setErrors(data);
+    // Política de retención: primero se eliminan los PDF de registros
+    // gestionados hace más de 4 meses y luego se cargan los datos al día.
+    limpiarPdfsVencidos().finally(() => {
+      fetchErrores().then((data) => {
+        if (data.length > 0) setErrors(data);
+      });
     });
     // Se siembran las cuentas base ANTES de leer: el upsert ignora las que ya
     // existen y garantiza que roles nuevos (ej. Corrector) aparezcan en la base.

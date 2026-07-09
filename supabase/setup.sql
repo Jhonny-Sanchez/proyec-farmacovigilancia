@@ -88,6 +88,18 @@ create table if not exists protocolos (
   creado_en timestamptz not null default now()
 );
 
+-- ============ 1b. REPARACIONES DE ESQUEMA ============
+-- Si alguna tabla fue creada por una versión anterior sin la columna
+-- creado_en, se agrega aquí (no afecta a las que ya la tienen).
+alter table registros_error add column if not exists creado_en timestamptz not null default now();
+alter table usuarios add column if not exists creado_en timestamptz not null default now();
+alter table programaciones_citas add column if not exists creado_en timestamptz not null default now();
+alter table volumenes_formulas add column if not exists creado_en timestamptz not null default now();
+alter table audit_logs add column if not exists creado_en timestamptz not null default now();
+alter table medicos add column if not exists creado_en timestamptz not null default now();
+alter table tipos_error add column if not exists creado_en timestamptz not null default now();
+alter table protocolos add column if not exists creado_en timestamptz not null default now();
+
 -- ============ 2. RLS: ROW LEVEL SECURITY ============
 -- Principio: la clave pública (anon) solo puede hacer lo que la app
 -- necesita. Todo lo demás queda bloqueado.
@@ -167,9 +179,28 @@ where schemaname = 'public'
 order by tablename;
 
 -- ============ 3. STORAGE (bucket "documentos") ============
--- Ya está restringido: subir y leer permitido, borrar bloqueado.
+-- Subir y leer ya están permitidos; el borrado general sigue bloqueado.
 -- Si el bucket llegara a recrearse, las políticas equivalentes son:
 --   subir:  create policy "docs_upload" on storage.objects for insert to anon
 --             with check (bucket_id = 'documentos');
 --   leer:   create policy "docs_read" on storage.objects for select to anon
 --             using (bucket_id = 'documentos');
+
+-- RETENCIÓN DOCUMENTAL: la aplicación puede borrar del bucket ÚNICAMENTE
+-- los PDF de registros gestionados en su totalidad (estado final) cuya
+-- última gestión ocurrió hace más de 4 meses. Todo otro borrado se niega.
+drop policy if exists "docs_delete_retencion" on storage.objects;
+create policy "docs_delete_retencion" on storage.objects for delete to anon, authenticated
+using (
+  bucket_id = 'documentos'
+  and exists (
+    select 1
+    from public.registros_error r
+    where r.id_registro = (storage.foldername(name))[1]
+      and r.estado_actual = 'ENTREGADO_PROGRAMACION'
+      and coalesce(
+            (r.historial_estados -> -1 ->> 'fecha')::date,
+            r.creado_en::date
+          ) < (now() - interval '4 months')::date
+  )
+);
