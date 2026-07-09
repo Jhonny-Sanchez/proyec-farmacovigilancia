@@ -9,7 +9,6 @@ import {
   STATUS_CONFIGS,
   ErrorStatus,
   UserRole,
-  TIPOS_DE_ERROR_CATALOG,
   DocumentoAdjunto,
 } from '../types';
 import { obtenerEnlacePDF } from '../dataService';
@@ -81,6 +80,7 @@ interface RegistrosViewProps {
     updatedFields?: Partial<RegistroError>
   ) => void;
   onNavigate: (page: string) => void;
+  tiposError: string[];
 }
 
 export default function RegistrosView({
@@ -90,6 +90,7 @@ export default function RegistrosView({
   onSelectError,
   onUpdateErrorStatus,
   onNavigate,
+  tiposError,
 }: RegistrosViewProps) {
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
@@ -98,7 +99,7 @@ export default function RegistrosView({
   const [filterStatus, setFilterStatus] = useState('');
 
   // States for active validation workflow actions
-  const [transitionErrorType, setTransitionErrorType] = useState('Error de dosis');
+  const [transitionErrorType, setTransitionErrorType] = useState(tiposError[0] || 'Error de dosis');
   const [transitionObservations, setTransitionObservations] = useState('');
   const [transitionCorrectionNotes, setTransitionCorrectionNotes] = useState('');
 
@@ -945,7 +946,7 @@ export default function RegistrosView({
                                 onChange={(e) => setTransitionErrorType(e.target.value)}
                                 className="w-full bg-[#131B2E] border border-[#1F2937] text-white p-2 rounded text-xs outline-none"
                               >
-                                {TIPOS_DE_ERROR_CATALOG.map((errType) => (
+                                {tiposError.map((errType) => (
                                   <option key={errType} value={errType}>{errType}</option>
                                 ))}
                               </select>

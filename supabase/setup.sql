@@ -72,6 +72,11 @@ create table if not exists medicos (
   creado_en timestamptz not null default now()
 );
 
+create table if not exists tipos_error (
+  nombre text primary key,
+  creado_en timestamptz not null default now()
+);
+
 -- ============ 2. RLS: ROW LEVEL SECURITY ============
 -- Principio: la clave pública (anon) solo puede hacer lo que la app
 -- necesita. Todo lo demás queda bloqueado.
@@ -83,6 +88,7 @@ alter table programaciones_citas enable row level security;
 alter table volumenes_formulas enable row level security;
 alter table audit_logs enable row level security;
 alter table medicos enable row level security;
+alter table tipos_error enable row level security;
 
 -- Eliminar TODAS las políticas existentes de estas tablas (incluidas
 -- políticas viejas "permitir todo" creadas por configuraciones previas)
@@ -93,7 +99,7 @@ begin
     select policyname, tablename from pg_policies
     where schemaname = 'public'
       and tablename in ('registros_error','usuarios','programaciones_citas',
-                        'volumenes_formulas','audit_logs','medicos')
+                        'volumenes_formulas','audit_logs','medicos','tipos_error')
   loop
     execute format('drop policy %I on %I', pol.policyname, pol.tablename);
   end loop;
@@ -129,13 +135,18 @@ create policy "medicos_select" on medicos for select to anon, authenticated usin
 create policy "medicos_insert" on medicos for insert to anon, authenticated with check (true);
 create policy "medicos_delete" on medicos for delete to anon, authenticated using (true);
 
+-- ---- tipos_error: catálogo administrable (clasificación de hallazgo). ----
+create policy "tipos_select" on tipos_error for select to anon, authenticated using (true);
+create policy "tipos_insert" on tipos_error for insert to anon, authenticated with check (true);
+create policy "tipos_delete" on tipos_error for delete to anon, authenticated using (true);
+
 -- ============ VERIFICACIÓN ============
--- Al terminar debe mostrar rls_activo = true en las 6 tablas.
+-- Al terminar debe mostrar rls_activo = true en las 7 tablas.
 select tablename as tabla, rowsecurity as rls_activo
 from pg_tables
 where schemaname = 'public'
   and tablename in ('registros_error','usuarios','programaciones_citas',
-                    'volumenes_formulas','audit_logs','medicos')
+                    'volumenes_formulas','audit_logs','medicos','tipos_error')
 order by tablename;
 
 -- ============ 3. STORAGE (bucket "documentos") ============

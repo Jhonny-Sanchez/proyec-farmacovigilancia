@@ -178,6 +178,41 @@ export async function seedMedicos(nombres: string[]) {
   if (error) console.error('Error al sembrar médicos iniciales:', error);
 }
 
+// ============ CATÁLOGO DE TIPOS DE ERROR (CLASIFICACIÓN DE HALLAZGO) ============
+
+export async function fetchTiposError(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('tipos_error')
+    .select('nombre')
+    .order('creado_en', { ascending: true });
+
+  if (error) {
+    console.error('Error al leer tipos de error:', error);
+    return [];
+  }
+  return (data as { nombre: string }[]).map((t) => t.nombre);
+}
+
+export async function insertTipoError(nombre: string) {
+  const { error } = await supabase
+    .from('tipos_error')
+    .upsert([{ nombre }], { onConflict: 'nombre', ignoreDuplicates: true });
+  if (error) console.error('Error al insertar tipo de error:', error);
+}
+
+export async function deleteTipoError(nombre: string) {
+  const { error } = await supabase.from('tipos_error').delete().eq('nombre', nombre);
+  if (error) console.error('Error al eliminar tipo de error:', error);
+}
+
+// Siembra el catálogo base de tipos de error la primera vez
+export async function seedTiposError(nombres: string[]) {
+  const { error } = await supabase
+    .from('tipos_error')
+    .upsert(nombres.map((nombre) => ({ nombre })), { onConflict: 'nombre', ignoreDuplicates: true });
+  if (error) console.error('Error al sembrar tipos de error iniciales:', error);
+}
+
 // ============ STORAGE DE DOCUMENTOS PDF ============
 
 // Subir un archivo PDF al bucket "documentos" y devolver su ruta

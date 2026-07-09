@@ -22,6 +22,10 @@ import {
   insertMedico,
   deleteMedico,
   seedMedicos,
+  fetchTiposError,
+  insertTipoError,
+  deleteTipoError,
+  seedTiposError,
 } from './dataService';
 import { fechaLocalISO } from './utils';
 import React, { useState, useEffect } from 'react';
@@ -35,6 +39,7 @@ import {
   AccountStatus,
   ProgramacionCita,
   MEDICOS_CATALOG,
+  TIPOS_DE_ERROR_CATALOG,
 } from './types';
 import {
   INITIAL_USERS,
@@ -117,6 +122,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : MEDICOS_CATALOG;
   });
 
+  const [tiposError, setTiposError] = useState<string[]>(() => {
+    const saved = localStorage.getItem('onco_tipos_error');
+    return saved ? JSON.parse(saved) : TIPOS_DE_ERROR_CATALOG;
+  });
+
   const [activePage, setActivePage] = useState<string>('dashboard');
   const [selectedError, setSelectedError] = useState<RegistroError | null>(null);
 
@@ -157,6 +167,10 @@ export default function App() {
   }, [medicos]);
 
   useEffect(() => {
+    localStorage.setItem('onco_tipos_error', JSON.stringify(tiposError));
+  }, [tiposError]);
+
+  useEffect(() => {
     if (currentUser) {
       localStorage.setItem('onco_current_user', JSON.stringify(currentUser));
     } else {
@@ -185,6 +199,10 @@ export default function App() {
     fetchMedicos().then((data) => {
       if (data.length > 0) setMedicos(data);
       else seedMedicos(MEDICOS_CATALOG); // primera vez: siembra el catálogo base
+    });
+    fetchTiposError().then((data) => {
+      if (data.length > 0) setTiposError(data);
+      else seedTiposError(TIPOS_DE_ERROR_CATALOG); // primera vez: siembra la clasificación base
     });
   }, []);
 
@@ -431,6 +449,22 @@ export default function App() {
     addAuditLog('Gestión Médicos', `Eliminó al médico prescriptor: ${medicoEliminar}.`);
   };
 
+  // Manage catálogo de tipos de error (clasificación de hallazgo)
+  const handleAddTipoError = (nuevoTipo: string) => {
+    setTiposError((prev) => {
+      if (prev.includes(nuevoTipo)) return prev;
+      return [...prev, nuevoTipo];
+    });
+    insertTipoError(nuevoTipo);
+    addAuditLog('Gestión Tipos de Error', `Agregó el tipo de error a la clasificación de hallazgo: ${nuevoTipo}.`);
+  };
+
+  const handleDeleteTipoError = (tipoEliminar: string) => {
+    setTiposError((prev) => prev.filter((t) => t !== tipoEliminar));
+    deleteTipoError(tipoEliminar);
+    addAuditLog('Gestión Tipos de Error', `Eliminó el tipo de error de la clasificación de hallazgo: ${tipoEliminar}.`);
+  };
+
   // Toggle user active status (Admin only)
   const handleUpdateUserStatus = (id_usuario: string, status: AccountStatus) => {
     setUsers((prev) =>
@@ -575,6 +609,7 @@ export default function App() {
             onSelectError={setSelectedError}
             onUpdateErrorStatus={handleUpdateErrorStatus}
             onNavigate={setActivePage}
+            tiposError={tiposError}
           />
         );
       case 'reportes':
@@ -601,6 +636,9 @@ export default function App() {
             medicos={medicos}
             onAddMedico={handleAddMedico}
             onDeleteMedico={handleDeleteMedico}
+            tiposError={tiposError}
+            onAddTipoError={handleAddTipoError}
+            onDeleteTipoError={handleDeleteTipoError}
           />
         );
       case 'roles_permisos':

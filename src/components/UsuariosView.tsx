@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { Usuario, ROLES_CATALOG, UserRole, AccountStatus } from '../types';
 import { fechaLocalISO } from '../utils';
-import { Users, Plus, Shield, CheckCircle2, XCircle, ArrowLeft, Trash2, Edit, Stethoscope } from 'lucide-react';
+import { Users, Plus, Shield, CheckCircle2, XCircle, ArrowLeft, Trash2, Edit, Stethoscope, AlertTriangle } from 'lucide-react';
 
 interface UsuariosViewProps {
   users: Usuario[];
@@ -18,6 +18,9 @@ interface UsuariosViewProps {
   medicos: string[];
   onAddMedico: (medico: string) => void;
   onDeleteMedico: (medico: string) => void;
+  tiposError: string[];
+  onAddTipoError: (tipo: string) => void;
+  onDeleteTipoError: (tipo: string) => void;
 }
 
 export default function UsuariosView({
@@ -30,9 +33,12 @@ export default function UsuariosView({
   medicos,
   onAddMedico,
   onDeleteMedico,
+  tiposError,
+  onAddTipoError,
+  onDeleteTipoError,
 }: UsuariosViewProps) {
   // Form states
-  const [activeTab, setActiveTab] = useState<'usuarios' | 'medicos'>('usuarios');
+  const [activeTab, setActiveTab] = useState<'usuarios' | 'medicos' | 'tipos_error'>('usuarios');
   const [username, setUsername] = useState('');
   const [fullname, setFullname] = useState('');
   const [password, setPassword] = useState('');
@@ -43,6 +49,31 @@ export default function UsuariosView({
   // Medicos states
   const [medicoName, setMedicoName] = useState('');
   const [medicoFeedback, setMedicoFeedback] = useState('');
+
+  // Tipos de error (clasificación de hallazgo) states
+  const [tipoName, setTipoName] = useState('');
+  const [tipoFeedback, setTipoFeedback] = useState('');
+
+  const handleTipoSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setTipoFeedback('');
+
+    const nombreLimpio = tipoName.trim();
+    if (!nombreLimpio) {
+      setTipoFeedback('Por favor escriba el nombre del tipo de error.');
+      return;
+    }
+
+    if (tiposError.some((t) => t.toLowerCase() === nombreLimpio.toLowerCase())) {
+      setTipoFeedback('Este tipo de error ya existe en la clasificación.');
+      return;
+    }
+
+    onAddTipoError(nombreLimpio);
+    setTipoName('');
+    setTipoFeedback('¡Tipo de error agregado con éxito a la clasificación!');
+    setTimeout(() => setTipoFeedback(''), 3000);
+  };
 
   const handleMedicoSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,6 +172,18 @@ export default function UsuariosView({
         >
           <Stethoscope className="w-4 h-4" />
           Médicos Prescriptores (Catálogo)
+        </button>
+        <button
+          id="tab-tipos-error"
+          onClick={() => setActiveTab('tipos_error')}
+          className={`pb-3 text-xs font-bold transition flex items-center gap-1.5 border-b-2 px-1 ${
+            activeTab === 'tipos_error'
+              ? 'text-cyan-400 border-cyan-400'
+              : 'text-[#9CA3AF] border-transparent hover:text-white'
+          }`}
+        >
+          <AlertTriangle className="w-4 h-4" />
+          Tipos de Error (Clasificación de Hallazgo)
         </button>
       </div>
 
@@ -317,7 +360,7 @@ export default function UsuariosView({
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'medicos' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left column: Add Medico Form */}
           <div className="bg-[#131B2E] border border-[#1F2937] rounded-xl p-5 space-y-4 h-fit">
@@ -412,6 +455,111 @@ export default function UsuariosView({
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             Eliminar Médico
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left column: Add Tipo de Error Form */}
+          <div className="bg-[#131B2E] border border-[#1F2937] rounded-xl p-5 space-y-4 h-fit">
+            <div className="flex items-center gap-2 border-b border-[#1F2937] pb-3">
+              <Plus className="w-4 h-4 text-[#3B82F6]" />
+              <h4 className="text-sm font-bold text-[#F3F4F6]">Agregar Tipo de Error</h4>
+            </div>
+
+            <form onSubmit={handleTipoSubmit} className="space-y-4">
+              {tipoFeedback && (
+                <div
+                  className={`p-3 rounded-lg text-xs font-semibold ${
+                    tipoFeedback.includes('éxito')
+                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-[#22C55E]'
+                      : 'bg-red-500/10 border border-red-500/20 text-[#EF4444]'
+                  }`}
+                >
+                  {tipoFeedback}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[#9CA3AF]">Nombre del Tipo de Error</label>
+                <input
+                  id="create-tipo-error-name"
+                  type="text"
+                  placeholder="ej. Error de duración de tratamiento"
+                  value={tipoName}
+                  onChange={(e) => setTipoName(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none font-sans font-semibold"
+                  required
+                />
+                <p className="text-[10px] text-gray-500 italic">
+                  * Aparecerá de inmediato en la lista "Clasificación de Hallazgo" que usa el Químico Farmacéutico al reportar errores.
+                </p>
+              </div>
+
+              <button
+                id="submit-create-tipo-error-btn"
+                type="submit"
+                className="w-full py-2 bg-[#3B82F6] hover:bg-blue-600 text-xs font-semibold text-white rounded-lg transition flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Agregar a la Clasificación
+              </button>
+            </form>
+          </div>
+
+          {/* Right column: Tipos de Error table */}
+          <div className="lg:col-span-2 bg-[#131B2E] border border-[#1F2937] rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-[#1F2937] pb-3">
+              <AlertTriangle className="w-4 h-4 text-[#3B82F6]" />
+              <h4 className="text-sm font-bold text-[#F3F4F6]">Clasificación de Hallazgo Vigente</h4>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table id="tipos-error-table" className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-[#1F2937] text-[#9CA3AF] font-semibold bg-[#1F2937]/20">
+                    <th className="p-3"># No.</th>
+                    <th className="p-3">Tipo de Error / Hallazgo</th>
+                    <th className="p-3 text-right">Acciones de Catálogo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1F2937]/40 font-semibold text-[#F3F4F6]">
+                  {tiposError.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="p-4 text-center text-gray-500 italic">
+                        No hay tipos de error registrados en la clasificación.
+                      </td>
+                    </tr>
+                  ) : (
+                    tiposError.map((tipo, index) => (
+                      <tr key={tipo} className="hover:bg-[#1F2937]/10 transition">
+                        <td className="p-3 font-mono text-gray-500 w-16">{index + 1}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{tipo}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 text-right">
+                          <button
+                            id={`delete-tipo-error-${index}`}
+                            onClick={() => {
+                              if (confirm(`¿Está seguro que desea eliminar el tipo de error "${tipo}"? Ya no aparecerá en la Clasificación de Hallazgo. Los registros históricos que lo usan no se modifican.`)) {
+                                onDeleteTipoError(tipo);
+                              }
+                            }}
+                            className="text-xs px-2.5 py-1 rounded transition border font-semibold text-red-400 border-red-400/20 hover:bg-red-500/10 flex items-center gap-1 ml-auto"
+                            title="Eliminar tipo de error de la clasificación"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Eliminar
                           </button>
                         </td>
                       </tr>
