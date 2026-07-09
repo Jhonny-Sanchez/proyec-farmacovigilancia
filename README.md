@@ -44,7 +44,7 @@ Todo el estado de la aplicación se guarda en Supabase y se comparte entre equip
 
 - **Registros de error** (`registros_error`): creación, cambios de estado con historial y documentos adjuntos. Sin borrado (protegido por RLS).
 - **Usuarios** (`usuarios`): cuentas y roles. La primera vez que la tabla está vacía, la app siembra las cuentas base automáticamente.
-- **Citas** (`programaciones_citas`), **denominadores** (`volumenes_formulas`), **médicos** (`medicos`).
+- **Citas** (`programaciones_citas`), **denominadores** (`volumenes_formulas`), **médicos** (`medicos`), **tipos de error** (`tipos_error`) y **protocolos oncológicos** (`protocolos`).
 - **Audit log** (`audit_logs`): inmutable — las políticas RLS impiden editarlo o borrarlo.
 - **PDFs** (bucket `documentos`): se suben con ruta `id_registro/tipo/timestamp_nombre.pdf` y se leen mediante enlaces firmados temporales (5 minutos).
 

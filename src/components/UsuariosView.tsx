@@ -4,9 +4,9 @@
  */
 
 import React, { useState } from 'react';
-import { Usuario, ROLES_CATALOG, UserRole, AccountStatus } from '../types';
+import { Usuario, ROLES_CATALOG, UserRole, AccountStatus, ProtocoloOncologico } from '../types';
 import { fechaLocalISO } from '../utils';
-import { Users, Plus, Shield, CheckCircle2, XCircle, ArrowLeft, Trash2, Edit, Stethoscope, AlertTriangle } from 'lucide-react';
+import { Users, Plus, Shield, CheckCircle2, XCircle, ArrowLeft, Trash2, Edit, Stethoscope, AlertTriangle, FlaskConical } from 'lucide-react';
 
 interface UsuariosViewProps {
   users: Usuario[];
@@ -21,6 +21,9 @@ interface UsuariosViewProps {
   tiposError: string[];
   onAddTipoError: (tipo: string) => void;
   onDeleteTipoError: (tipo: string) => void;
+  protocolos: ProtocoloOncologico[];
+  onAddProtocolo: (protocolo: ProtocoloOncologico) => void;
+  onDeleteProtocolo: (nombre: string) => void;
 }
 
 export default function UsuariosView({
@@ -36,9 +39,12 @@ export default function UsuariosView({
   tiposError,
   onAddTipoError,
   onDeleteTipoError,
+  protocolos,
+  onAddProtocolo,
+  onDeleteProtocolo,
 }: UsuariosViewProps) {
   // Form states
-  const [activeTab, setActiveTab] = useState<'usuarios' | 'medicos' | 'tipos_error'>('usuarios');
+  const [activeTab, setActiveTab] = useState<'usuarios' | 'medicos' | 'tipos_error' | 'protocolos'>('usuarios');
   const [username, setUsername] = useState('');
   const [fullname, setFullname] = useState('');
   const [password, setPassword] = useState('');
@@ -73,6 +79,52 @@ export default function UsuariosView({
     setTipoName('');
     setTipoFeedback('¡Tipo de error agregado con éxito a la clasificación!');
     setTimeout(() => setTipoFeedback(''), 3000);
+  };
+
+  // Protocolos oncológicos states
+  const [protNombre, setProtNombre] = useState('');
+  const [protMedicamentos, setProtMedicamentos] = useState('');
+  const [protFrecuencia, setProtFrecuencia] = useState('');
+  const [protCiclos, setProtCiclos] = useState(1);
+  const [protObservaciones, setProtObservaciones] = useState('');
+  const [protFeedback, setProtFeedback] = useState('');
+
+  const handleProtocoloSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setProtFeedback('');
+
+    if (!protNombre.trim() || !protMedicamentos.trim() || !protFrecuencia.trim()) {
+      setProtFeedback('Complete el nombre, los medicamentos y la frecuencia del protocolo.');
+      return;
+    }
+    if (protCiclos < 1) {
+      setProtFeedback('La cantidad de ciclos debe ser al menos 1.');
+      return;
+    }
+
+    const nombreLimpio = protNombre.trim().toUpperCase();
+    if (protocolos.some((p) => p.nombre === nombreLimpio)) {
+      setProtFeedback('Ya existe un protocolo con ese nombre.');
+      return;
+    }
+
+    onAddProtocolo({
+      nombre: nombreLimpio,
+      medicamentos: protMedicamentos.trim(),
+      frecuencia_aplicacion: protFrecuencia.trim(),
+      cantidad_ciclos: protCiclos,
+      observaciones: protObservaciones.trim() || undefined,
+      creado_por: currentUser.nombre_usuario,
+      fecha_creacion: fechaLocalISO(),
+    });
+
+    setProtNombre('');
+    setProtMedicamentos('');
+    setProtFrecuencia('');
+    setProtCiclos(1);
+    setProtObservaciones('');
+    setProtFeedback('¡Protocolo oncológico registrado con éxito!');
+    setTimeout(() => setProtFeedback(''), 3000);
   };
 
   const handleMedicoSubmit = (e: React.FormEvent) => {
@@ -184,6 +236,18 @@ export default function UsuariosView({
         >
           <AlertTriangle className="w-4 h-4" />
           Tipos de Error (Clasificación de Hallazgo)
+        </button>
+        <button
+          id="tab-protocolos"
+          onClick={() => setActiveTab('protocolos')}
+          className={`pb-3 text-xs font-bold transition flex items-center gap-1.5 border-b-2 px-1 ${
+            activeTab === 'protocolos'
+              ? 'text-cyan-400 border-cyan-400'
+              : 'text-[#9CA3AF] border-transparent hover:text-white'
+          }`}
+        >
+          <FlaskConical className="w-4 h-4" />
+          Protocolos Oncológicos
         </button>
       </div>
 
@@ -465,7 +529,7 @@ export default function UsuariosView({
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'tipos_error' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left column: Add Tipo de Error Form */}
           <div className="bg-[#131B2E] border border-[#1F2937] rounded-xl p-5 space-y-4 h-fit">
@@ -557,6 +621,169 @@ export default function UsuariosView({
                             }}
                             className="text-xs px-2.5 py-1 rounded transition border font-semibold text-red-400 border-red-400/20 hover:bg-red-500/10 flex items-center gap-1 ml-auto"
                             title="Eliminar tipo de error de la clasificación"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left column: Add Protocolo Form */}
+          <div className="bg-[#131B2E] border border-[#1F2937] rounded-xl p-5 space-y-4 h-fit">
+            <div className="flex items-center gap-2 border-b border-[#1F2937] pb-3">
+              <Plus className="w-4 h-4 text-[#3B82F6]" />
+              <h4 className="text-sm font-bold text-[#F3F4F6]">Registrar Protocolo Oncológico</h4>
+            </div>
+
+            <form onSubmit={handleProtocoloSubmit} className="space-y-4">
+              {protFeedback && (
+                <div
+                  className={`p-3 rounded-lg text-xs font-semibold ${
+                    protFeedback.includes('éxito')
+                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-[#22C55E]'
+                      : 'bg-red-500/10 border border-red-500/20 text-[#EF4444]'
+                  }`}
+                >
+                  {protFeedback}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[#9CA3AF]">Nombre del Protocolo *</label>
+                <input
+                  id="create-protocolo-nombre"
+                  type="text"
+                  placeholder="ej. FOLFOX-6"
+                  value={protNombre}
+                  onChange={(e) => setProtNombre(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none uppercase font-semibold"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[#9CA3AF]">Medicamentos del Esquema *</label>
+                <textarea
+                  id="create-protocolo-medicamentos"
+                  rows={3}
+                  placeholder="ej. Oxaliplatino 85 mg/m² + Leucovorina 400 mg/m² + 5-Fluorouracilo 400 mg/m² bolo"
+                  value={protMedicamentos}
+                  onChange={(e) => setProtMedicamentos(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none resize-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-[#9CA3AF]">Frecuencia de Aplicación *</label>
+                  <input
+                    id="create-protocolo-frecuencia"
+                    type="text"
+                    placeholder="ej. Cada 21 días"
+                    value={protFrecuencia}
+                    onChange={(e) => setProtFrecuencia(e.target.value)}
+                    className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-[#9CA3AF]">Cantidad de Ciclos *</label>
+                  <input
+                    id="create-protocolo-ciclos"
+                    type="number"
+                    min="1"
+                    value={protCiclos}
+                    onChange={(e) => setProtCiclos(parseInt(e.target.value, 10) || 1)}
+                    className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[#9CA3AF]">Observaciones (Opcional)</label>
+                <textarea
+                  id="create-protocolo-observaciones"
+                  rows={2}
+                  placeholder="ej. Requiere pre-medicación antiemética. Monitorear neuropatía."
+                  value={protObservaciones}
+                  onChange={(e) => setProtObservaciones(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none resize-none"
+                />
+              </div>
+
+              <button
+                id="submit-create-protocolo-btn"
+                type="submit"
+                className="w-full py-2 bg-[#3B82F6] hover:bg-blue-600 text-xs font-semibold text-white rounded-lg transition flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Registrar Protocolo
+              </button>
+            </form>
+          </div>
+
+          {/* Right column: Protocolos table */}
+          <div className="lg:col-span-2 bg-[#131B2E] border border-[#1F2937] rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2 border-b border-[#1F2937] pb-3">
+              <FlaskConical className="w-4 h-4 text-[#3B82F6]" />
+              <h4 className="text-sm font-bold text-[#F3F4F6]">Protocolos Oncológicos Vigentes</h4>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table id="protocolos-table" className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-[#1F2937] text-[#9CA3AF] font-semibold bg-[#1F2937]/20">
+                    <th className="p-3">Protocolo</th>
+                    <th className="p-3">Medicamentos</th>
+                    <th className="p-3">Frecuencia</th>
+                    <th className="p-3">Ciclos</th>
+                    <th className="p-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1F2937]/40 text-[#F3F4F6]">
+                  {protocolos.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-4 text-center text-gray-500 italic">
+                        No hay protocolos registrados. Agregue el primero con el formulario de la izquierda.
+                      </td>
+                    </tr>
+                  ) : (
+                    protocolos.map((prot) => (
+                      <tr key={prot.nombre} className="hover:bg-[#1F2937]/10 transition align-top">
+                        <td className="p-3 font-bold text-cyan-300">
+                          <div className="flex items-center gap-1.5">
+                            <FlaskConical className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                            {prot.nombre}
+                          </div>
+                        </td>
+                        <td className="p-3 text-gray-300 max-w-[280px]">
+                          {prot.medicamentos}
+                          {prot.observaciones && (
+                            <p className="text-[10px] text-gray-500 italic mt-1">{prot.observaciones}</p>
+                          )}
+                        </td>
+                        <td className="p-3 whitespace-nowrap">{prot.frecuencia_aplicacion}</td>
+                        <td className="p-3 font-mono">{prot.cantidad_ciclos}</td>
+                        <td className="p-3 text-right">
+                          <button
+                            id={`delete-protocolo-${prot.nombre}`}
+                            onClick={() => {
+                              if (confirm(`¿Está seguro que desea eliminar el protocolo ${prot.nombre}? Las citas ya programadas con él no se modifican.`)) {
+                                onDeleteProtocolo(prot.nombre);
+                              }
+                            }}
+                            className="text-xs px-2.5 py-1 rounded transition border font-semibold text-red-400 border-red-400/20 hover:bg-red-500/10 flex items-center gap-1 ml-auto"
+                            title="Eliminar protocolo"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             Eliminar

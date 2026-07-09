@@ -77,6 +77,17 @@ create table if not exists tipos_error (
   creado_en timestamptz not null default now()
 );
 
+create table if not exists protocolos (
+  nombre text primary key,
+  medicamentos text not null,
+  frecuencia_aplicacion text not null,
+  cantidad_ciclos integer not null,
+  observaciones text,
+  creado_por text not null,
+  fecha_creacion text not null,
+  creado_en timestamptz not null default now()
+);
+
 -- ============ 2. RLS: ROW LEVEL SECURITY ============
 -- Principio: la clave pública (anon) solo puede hacer lo que la app
 -- necesita. Todo lo demás queda bloqueado.
@@ -89,6 +100,7 @@ alter table volumenes_formulas enable row level security;
 alter table audit_logs enable row level security;
 alter table medicos enable row level security;
 alter table tipos_error enable row level security;
+alter table protocolos enable row level security;
 
 -- Eliminar TODAS las políticas existentes de estas tablas (incluidas
 -- políticas viejas "permitir todo" creadas por configuraciones previas)
@@ -99,7 +111,7 @@ begin
     select policyname, tablename from pg_policies
     where schemaname = 'public'
       and tablename in ('registros_error','usuarios','programaciones_citas',
-                        'volumenes_formulas','audit_logs','medicos','tipos_error')
+                        'volumenes_formulas','audit_logs','medicos','tipos_error','protocolos')
   loop
     execute format('drop policy %I on %I', pol.policyname, pol.tablename);
   end loop;
@@ -140,13 +152,18 @@ create policy "tipos_select" on tipos_error for select to anon, authenticated us
 create policy "tipos_insert" on tipos_error for insert to anon, authenticated with check (true);
 create policy "tipos_delete" on tipos_error for delete to anon, authenticated using (true);
 
+-- ---- protocolos: catálogo administrable de protocolos oncológicos. ----
+create policy "protocolos_select" on protocolos for select to anon, authenticated using (true);
+create policy "protocolos_insert" on protocolos for insert to anon, authenticated with check (true);
+create policy "protocolos_delete" on protocolos for delete to anon, authenticated using (true);
+
 -- ============ VERIFICACIÓN ============
--- Al terminar debe mostrar rls_activo = true en las 7 tablas.
+-- Al terminar debe mostrar rls_activo = true en las 8 tablas.
 select tablename as tabla, rowsecurity as rls_activo
 from pg_tables
 where schemaname = 'public'
   and tablename in ('registros_error','usuarios','programaciones_citas',
-                    'volumenes_formulas','audit_logs','medicos','tipos_error')
+                    'volumenes_formulas','audit_logs','medicos','tipos_error','protocolos')
 order by tablename;
 
 -- ============ 3. STORAGE (bucket "documentos") ============

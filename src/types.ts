@@ -113,6 +113,17 @@ export interface ProgramacionCita {
   whatsapp_enviado?: boolean;
 }
 
+// Protocolo oncológico: define medicamentos, frecuencia y ciclos de un esquema
+export interface ProtocoloOncologico {
+  nombre: string; // clave única del protocolo (ej. FOLFOX-6)
+  medicamentos: string; // medicamentos que componen el esquema
+  frecuencia_aplicacion: string; // ej. "Cada 21 días"
+  cantidad_ciclos: number;
+  observaciones?: string;
+  creado_por: string;
+  fecha_creacion: string;
+}
+
 export interface VolumenFormulas {
   id: string;
   fecha: string;

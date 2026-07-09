@@ -26,6 +26,9 @@ import {
   insertTipoError,
   deleteTipoError,
   seedTiposError,
+  fetchProtocolos,
+  insertProtocolo,
+  deleteProtocolo,
 } from './dataService';
 import { fechaLocalISO } from './utils';
 import React, { useState, useEffect } from 'react';
@@ -38,6 +41,7 @@ import {
   ErrorStatus,
   AccountStatus,
   ProgramacionCita,
+  ProtocoloOncologico,
   MEDICOS_CATALOG,
   TIPOS_DE_ERROR_CATALOG,
 } from './types';
@@ -127,6 +131,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : TIPOS_DE_ERROR_CATALOG;
   });
 
+  const [protocolos, setProtocolos] = useState<ProtocoloOncologico[]>(() => {
+    const saved = localStorage.getItem('onco_protocolos');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const [activePage, setActivePage] = useState<string>('dashboard');
   const [selectedError, setSelectedError] = useState<RegistroError | null>(null);
 
@@ -171,6 +180,10 @@ export default function App() {
   }, [tiposError]);
 
   useEffect(() => {
+    localStorage.setItem('onco_protocolos', JSON.stringify(protocolos));
+  }, [protocolos]);
+
+  useEffect(() => {
     if (currentUser) {
       localStorage.setItem('onco_current_user', JSON.stringify(currentUser));
     } else {
@@ -203,6 +216,9 @@ export default function App() {
     fetchTiposError().then((data) => {
       if (data.length > 0) setTiposError(data);
       else seedTiposError(TIPOS_DE_ERROR_CATALOG); // primera vez: siembra la clasificación base
+    });
+    fetchProtocolos().then((data) => {
+      if (data.length > 0) setProtocolos(data);
     });
   }, []);
 
@@ -465,6 +481,22 @@ export default function App() {
     addAuditLog('Gestión Tipos de Error', `Eliminó el tipo de error de la clasificación de hallazgo: ${tipoEliminar}.`);
   };
 
+  // Manage protocolos oncológicos
+  const handleAddProtocolo = (nuevoProtocolo: ProtocoloOncologico) => {
+    setProtocolos((prev) => {
+      if (prev.some((p) => p.nombre === nuevoProtocolo.nombre)) return prev;
+      return [...prev, nuevoProtocolo];
+    });
+    insertProtocolo(nuevoProtocolo);
+    addAuditLog('Gestión Protocolos', `Agregó el protocolo oncológico: ${nuevoProtocolo.nombre} (${nuevoProtocolo.cantidad_ciclos} ciclos, ${nuevoProtocolo.frecuencia_aplicacion}).`);
+  };
+
+  const handleDeleteProtocolo = (nombreProtocolo: string) => {
+    setProtocolos((prev) => prev.filter((p) => p.nombre !== nombreProtocolo));
+    deleteProtocolo(nombreProtocolo);
+    addAuditLog('Gestión Protocolos', `Eliminó el protocolo oncológico: ${nombreProtocolo}.`);
+  };
+
   // Toggle user active status (Admin only)
   const handleUpdateUserStatus = (id_usuario: string, status: AccountStatus) => {
     setUsers((prev) =>
@@ -639,6 +671,9 @@ export default function App() {
             tiposError={tiposError}
             onAddTipoError={handleAddTipoError}
             onDeleteTipoError={handleDeleteTipoError}
+            protocolos={protocolos}
+            onAddProtocolo={handleAddProtocolo}
+            onDeleteProtocolo={handleDeleteProtocolo}
           />
         );
       case 'roles_permisos':
@@ -673,6 +708,7 @@ export default function App() {
             onDeleteProgramacion={handleDeleteProgramacion}
             onNavigate={setActivePage}
             currentUser={currentUser!}
+            protocolos={protocolos}
           />
         );
       default:

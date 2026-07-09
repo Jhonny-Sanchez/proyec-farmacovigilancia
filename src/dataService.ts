@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { RegistroError, Usuario, ProgramacionCita, VolumenFormulas, AuditLog } from './types';
+import { RegistroError, Usuario, ProgramacionCita, VolumenFormulas, AuditLog, ProtocoloOncologico } from './types';
 
 // ============ REGISTROS DE ERROR ============
 
@@ -211,6 +211,33 @@ export async function seedTiposError(nombres: string[]) {
     .from('tipos_error')
     .upsert(nombres.map((nombre) => ({ nombre })), { onConflict: 'nombre', ignoreDuplicates: true });
   if (error) console.error('Error al sembrar tipos de error iniciales:', error);
+}
+
+// ============ PROTOCOLOS ONCOLÓGICOS ============
+
+export async function fetchProtocolos(): Promise<ProtocoloOncologico[]> {
+  const { data, error } = await supabase
+    .from('protocolos')
+    .select('*')
+    .order('nombre', { ascending: true });
+
+  if (error) {
+    console.error('Error al leer protocolos:', error);
+    return [];
+  }
+  return data as ProtocoloOncologico[];
+}
+
+export async function insertProtocolo(protocolo: ProtocoloOncologico) {
+  const { error } = await supabase
+    .from('protocolos')
+    .upsert([protocolo], { onConflict: 'nombre', ignoreDuplicates: true });
+  if (error) console.error('Error al insertar protocolo:', error);
+}
+
+export async function deleteProtocolo(nombre: string) {
+  const { error } = await supabase.from('protocolos').delete().eq('nombre', nombre);
+  if (error) console.error('Error al eliminar protocolo:', error);
 }
 
 // ============ STORAGE DE DOCUMENTOS PDF ============

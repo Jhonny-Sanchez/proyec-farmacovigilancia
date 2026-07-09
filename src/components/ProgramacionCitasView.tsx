@@ -27,7 +27,7 @@ import {
   X,
   Check,
 } from 'lucide-react';
-import { RegistroError, ProgramacionCita, UserRole } from '../types';
+import { RegistroError, ProgramacionCita, UserRole, ProtocoloOncologico } from '../types';
 
 interface ProgramacionCitasViewProps {
   errors: RegistroError[];
@@ -38,6 +38,7 @@ interface ProgramacionCitasViewProps {
   onDeleteProgramacion: (id: string) => void;
   onNavigate: (page: string) => void;
   currentUser: { nombre_usuario: string; rol: UserRole };
+  protocolos: ProtocoloOncologico[];
 }
 
 export default function ProgramacionCitasView({
@@ -49,6 +50,7 @@ export default function ProgramacionCitasView({
   onDeleteProgramacion,
   onNavigate,
   currentUser,
+  protocolos,
 }: ProgramacionCitasViewProps) {
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,6 +72,13 @@ export default function ProgramacionCitasView({
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState(false);
   const [ignoreWarning, setIgnoreWarning] = useState(false);
+
+  // Búsqueda de paciente recurrente por cédula
+  const [cedulaBusqueda, setCedulaBusqueda] = useState('');
+  const [cedulaFeedback, setCedulaFeedback] = useState('');
+
+  // Protocolo oncológico seleccionado (autollenado de medicamentos)
+  const [protocoloSeleccionado, setProtocoloSeleccionado] = useState('');
 
   // Simulation states
   const [simulatingAppointmentId, setSimulatingAppointmentId] = useState<string | null>(null);
@@ -105,6 +114,71 @@ export default function ProgramacionCitasView({
 
   const isDuplicateCycleAndDay = !!existingCycleDay;
   const isDuplicateDate = !!existingDate;
+
+  // Control de intervalo mínimo entre quimioterapias: si el paciente tiene
+  // otra aplicación a menos de 21 días de la nueva fecha, se genera un aviso
+  // que el Programador puede autorizar expresamente.
+  const DIAS_MINIMOS_ENTRE_QUIMIOS = 21;
+  const quimioReciente = selectedRecord && fechaAplicacion
+    ? programaciones
+        .filter(
+          (p) =>
+            p.numero_documento === selectedRecord.numero_documento &&
+            p.estado_programacion !== 'Cancelada' &&
+            p.fecha_aplicacion !== fechaAplicacion
+        )
+        .map((p) => ({
+          prog: p,
+          dias: Math.abs(
+            Math.round(
+              (new Date(`${fechaAplicacion}T00:00:00`).getTime() -
+                new Date(`${p.fecha_aplicacion}T00:00:00`).getTime()) /
+                86400000
+            )
+          ),
+        }))
+        .filter((x) => x.dias < DIAS_MINIMOS_ENTRE_QUIMIOS)
+        .sort((a, b) => a.dias - b.dias)[0] || null
+    : null;
+
+  const protocoloActivo = protocolos.find((p) => p.nombre === protocoloSeleccionado) || null;
+
+  // Carga los datos y teléfonos del paciente en el formulario
+  const aplicarDatosPaciente = (rec: RegistroError) => {
+    setSelectedRegistroId(rec.id_registro);
+    setTelefonoContacto1(rec.numero_celular || rec.telefono_fijo || '');
+    setTelefonoContacto2(rec.celular_contacto_adicional_1 || '');
+    setTelefonoContacto3(rec.celular_contacto_adicional_2 || '');
+    if (!protocoloSeleccionado) {
+      setMedicamento(rec.tipo_error ? 'Medicamento Corregido' : '');
+    }
+  };
+
+  const handleBuscarPorCedula = (valor: string) => {
+    setCedulaBusqueda(valor);
+    const doc = valor.trim();
+    if (!doc) {
+      setCedulaFeedback('');
+      return;
+    }
+    const rec = approvedRecords.find((r) => r.numero_documento === doc);
+    if (rec) {
+      aplicarDatosPaciente(rec);
+      setCedulaFeedback(`Paciente encontrado: ${rec.nombre_paciente} ${rec.apellidos_paciente} (${rec.eps}). Datos y teléfonos cargados automáticamente.`);
+    } else if (errors.some((r) => r.numero_documento === doc)) {
+      setCedulaFeedback('El paciente está registrado, pero su fórmula aún no ha sido aprobada por el Químico Farmacéutico.');
+    } else {
+      setCedulaFeedback(doc.length >= 5 ? 'No existe un paciente registrado con esa cédula.' : '');
+    }
+  };
+
+  const handleSeleccionProtocolo = (nombre: string) => {
+    setProtocoloSeleccionado(nombre);
+    const prot = protocolos.find((p) => p.nombre === nombre);
+    if (prot) {
+      setMedicamento(`${prot.nombre}: ${prot.medicamentos}`);
+    }
+  };
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -154,9 +228,9 @@ export default function ProgramacionCitasView({
       return;
     }
 
-    // Check duplication warnings
-    if ((isDuplicateCycleAndDay || isDuplicateDate) && !ignoreWarning) {
-      setFormError('Alerta de duplicidad: Ya existe una programación para este ciclo/día o fecha. Para continuar, revise las alertas abajo y marque la casilla de confirmación.');
+    // Check duplication and 21-day interval warnings
+    if ((isDuplicateCycleAndDay || isDuplicateDate || quimioReciente) && !ignoreWarning) {
+      setFormError('Alerta de programación: revise las advertencias de abajo y, si decide continuar, marque la casilla de autorización del Programador.');
       return;
     }
 
@@ -177,7 +251,11 @@ export default function ProgramacionCitasView({
       telefono_contacto_2: telefonoContacto2.trim() || undefined,
       telefono_contacto_3: telefonoContacto3.trim() || undefined,
       medicamento: medicamento.trim(),
-      observaciones: observaciones.trim(),
+      observaciones:
+        observaciones.trim() +
+        (quimioReciente && ignoreWarning
+          ? `\n[AUTORIZADO POR PROGRAMADOR: se agenda pese a existir una aplicación el ${quimioReciente.prog.fecha_aplicacion}, a ${quimioReciente.dias} día(s) de esta cita. Intervalo mínimo recomendado: ${DIAS_MINIMOS_ENTRE_QUIMIOS} días.]`
+          : ''),
       estado_programacion: 'Programada',
       fecha_registro: fechaLocalISO(),
       programado_por: currentUser.nombre_usuario,
@@ -207,6 +285,9 @@ export default function ProgramacionCitasView({
     setCiclo(1);
     setDiaAplicacion(1);
     setIgnoreWarning(false);
+    setCedulaBusqueda('');
+    setCedulaFeedback('');
+    setProtocoloSeleccionado('');
 
     setTimeout(() => {
       setFormSuccess(false);
@@ -300,6 +381,29 @@ export default function ProgramacionCitasView({
                 </div>
               )}
 
+              {/* Búsqueda rápida de paciente recurrente por cédula */}
+              <div className="space-y-1.5 text-xs">
+                <label className="block text-gray-400 font-semibold">Buscar Paciente por Cédula (pacientes ya registrados)</label>
+                <input
+                  id="input-buscar-cedula"
+                  type="text"
+                  placeholder="Digite el número de documento y los datos del paciente se cargan automáticamente..."
+                  value={cedulaBusqueda}
+                  onChange={(e) => handleBuscarPorCedula(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-2 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none focus:border-cyan-400 transition font-mono"
+                />
+                {cedulaFeedback && (
+                  <p
+                    id="cedula-feedback"
+                    className={`text-[11px] font-semibold ${
+                      cedulaFeedback.startsWith('Paciente encontrado') ? 'text-emerald-400' : 'text-amber-400'
+                    }`}
+                  >
+                    {cedulaFeedback}
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                 {/* Select patient */}
                 <div className="space-y-1.5 md:col-span-2">
@@ -308,10 +412,11 @@ export default function ProgramacionCitasView({
                     id="select-patient-program"
                     value={selectedRegistroId}
                     onChange={(e) => {
-                      setSelectedRegistroId(e.target.value);
                       const rec = errors.find((r) => r.id_registro === e.target.value);
                       if (rec) {
-                        setMedicamento(rec.tipo_error ? 'Medicamento Corregido' : '');
+                        aplicarDatosPaciente(rec);
+                      } else {
+                        setSelectedRegistroId(e.target.value);
                       }
                     }}
                     className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-2 text-xs text-[#F3F4F6] focus:border-cyan-400 outline-none transition"
@@ -397,6 +502,51 @@ export default function ProgramacionCitasView({
                 </div>
               </div>
 
+              {/* Protocolo oncológico: autollenado de medicamentos y esquema */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <div className="space-y-1.5">
+                  <label className="block text-gray-400 font-semibold">Protocolo Oncológico (Opcional)</label>
+                  <select
+                    id="select-protocolo"
+                    value={protocoloSeleccionado}
+                    onChange={(e) => handleSeleccionProtocolo(e.target.value)}
+                    className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-2 text-xs text-[#F3F4F6] focus:border-cyan-400 outline-none transition"
+                  >
+                    <option value="">-- Sin protocolo / ingreso manual --</option>
+                    {protocolos.map((p) => (
+                      <option key={p.nombre} value={p.nombre}>
+                        {p.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-gray-500 italic">
+                    Al elegir un protocolo, los medicamentos se llenan solos. El Administrador los gestiona en Usuarios Sistema.
+                  </p>
+                </div>
+
+                <div id="protocolo-info-card" className="md:col-span-2 bg-[#0B1120] border border-[#1F2937] rounded-lg p-3 flex flex-col justify-center space-y-1">
+                  {protocoloActivo ? (
+                    <div className="space-y-0.5 text-[11px]">
+                      <p className="font-bold text-cyan-300">{protocoloActivo.nombre}</p>
+                      <p className="text-gray-300">
+                        <span className="text-gray-500 font-semibold">Medicamentos:</span> {protocoloActivo.medicamentos}
+                      </p>
+                      <p className="text-gray-300">
+                        <span className="text-gray-500 font-semibold">Frecuencia:</span> {protocoloActivo.frecuencia_aplicacion}
+                        <span className="text-gray-500 font-semibold ml-3">Ciclos:</span> {protocoloActivo.cantidad_ciclos}
+                      </p>
+                      {protocoloActivo.observaciones && (
+                        <p className="text-gray-400 italic">{protocoloActivo.observaciones}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-400 italic">
+                      Seleccione un protocolo para ver sus medicamentos, frecuencia de aplicación y cantidad de ciclos.
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* Time and Contact Numbers Section */}
               <div className="border-t border-[#1F2937]/50 pt-4">
                 <h5 className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
@@ -468,12 +618,20 @@ export default function ProgramacionCitasView({
               </div>
 
               {/* Warnings and Acknowledge checkbox */}
-              {(isDuplicateCycleAndDay || isDuplicateDate) && (
+              {(isDuplicateCycleAndDay || isDuplicateDate || quimioReciente) && (
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-3">
                   <div className="flex items-start gap-2 text-xs text-amber-400">
                     <AlertCircle className="w-5 h-5 shrink-0 text-amber-400 mt-0.5" />
                     <div className="space-y-1">
-                      <span className="font-bold block">¡Advertencia de Programación Duplicada!</span>
+                      <span className="font-bold block">¡Advertencia de Programación!</span>
+                      {quimioReciente && (
+                        <p id="aviso-21-dias">
+                          <strong>Control de 21 días:</strong> el paciente ya tuvo o tiene programada una aplicación de quimioterapia el{' '}
+                          <strong className="text-white">{quimioReciente.prog.fecha_aplicacion}</strong> (Ciclo {quimioReciente.prog.ciclo_actual}, Día {quimioReciente.prog.dia_aplicacion}
+                          {quimioReciente.prog.medicamento ? ` - ${quimioReciente.prog.medicamento}` : ''}), a solo{' '}
+                          <strong className="text-white">{quimioReciente.dias} día(s)</strong> de la fecha seleccionada. El intervalo mínimo recomendado entre quimioterapias es de <strong className="text-white">21 días</strong>. Puede continuar únicamente bajo autorización del Programador.
+                        </p>
+                      )}
                       {isDuplicateCycleAndDay && existingCycleDay && (
                         <p>
                           El paciente <strong>{selectedRecord?.nombre_paciente} {selectedRecord?.apellidos_paciente}</strong> ya tiene programada una cita para el <strong className="text-white">Ciclo {ciclo}, Día de Aplicación {diaAplicacion}</strong> (ID: <span className="font-mono text-white">{existingCycleDay.id_programacion}</span> - Fecha: {existingCycleDay.fecha_aplicacion} - Medicamento: {existingCycleDay.medicamento || 'N/A'}).
@@ -498,7 +656,7 @@ export default function ProgramacionCitasView({
                       onChange={(e) => setIgnoreWarning(e.target.checked)}
                       className="rounded border-[#1F2937] text-amber-500 focus:ring-amber-500 bg-[#0B1120]"
                     />
-                    <span>Comprendo el riesgo de duplicidad, deseo proceder y guardar la cita de todas formas.</span>
+                    <span>Como Programador, comprendo la advertencia y autorizo agendar la cita de todas formas.</span>
                   </label>
                 </div>
               )}
