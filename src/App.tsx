@@ -196,10 +196,13 @@ export default function App() {
     fetchErrores().then((data) => {
       if (data.length > 0) setErrors(data);
     });
-    fetchUsuarios().then((data) => {
-      if (data.length > 0) setUsers(data);
-      else seedUsuarios(INITIAL_USERS); // primera vez: siembra las cuentas base
-    });
+    // Se siembran las cuentas base ANTES de leer: el upsert ignora las que ya
+    // existen y garantiza que roles nuevos (ej. Corrector) aparezcan en la base.
+    seedUsuarios(INITIAL_USERS)
+      .then(() => fetchUsuarios())
+      .then((data) => {
+        if (data.length > 0) setUsers(data);
+      });
     fetchProgramaciones().then((data) => {
       if (data.length > 0) setProgramaciones(data);
     });
@@ -827,6 +830,14 @@ export default function App() {
                 <span className="font-bold block text-cyan-400 font-sans">4. Programador Citas</span>
                 <span>pedro_prog / prog123</span>
               </button>
+              <button
+                id="quick-login-corrector"
+                onClick={() => handleQuickLogin('corrector01', 'corrector123')}
+                className="p-2 rounded bg-[#0B1120] border border-[#1F2937] text-left text-[10px] hover:border-[#3B82F6] transition text-gray-300 hover:text-white"
+              >
+                <span className="font-bold block text-amber-400">5. Corrector Fórmulas</span>
+                <span>corrector01 / corrector123</span>
+              </button>
             </div>
             <p className="text-[10px] text-gray-500 italic text-center pt-1">
               * El sistema simula el control de acceso en base a estos perfiles.
@@ -1130,6 +1141,7 @@ export default function App() {
                 <option value="Registro">Sesión: Registro</option>
                 <option value="QuimicoFarmaceutico">Sesión: Químico Farm.</option>
                 <option value="Programador">Sesión: Programador</option>
+                <option value="Corrector">Sesión: Corrector</option>
                 <option value="Consulta">Sesión: Auditor (Solo lectura)</option>
               </select>
             </div>

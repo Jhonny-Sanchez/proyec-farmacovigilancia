@@ -8,6 +8,7 @@ export type UserRole =
   | 'Registro'
   | 'QuimicoFarmaceutico'
   | 'Programador'
+  | 'Corrector'
   | 'Consulta';
 
 export type AccountStatus = 'Activo' | 'Inactivo';
@@ -179,6 +180,7 @@ export const ROLES_CATALOG: UserRole[] = [
   'Registro',
   'QuimicoFarmaceutico',
   'Programador',
+  'Corrector',
   'Consulta',
 ];
 

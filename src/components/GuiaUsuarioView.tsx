@@ -155,6 +155,17 @@ export default function GuiaUsuarioView({ onNavigate, currentUserRole }: GuiaUsu
       ],
       tip: 'La programación es el paso final que garantiza que el paciente reciba su terapia oncológica de manera oportuna y dosificada de acuerdo con el protocolo médico.',
     },
+    Corrector: {
+      title: 'Guía de Corrección de Fórmulas (Perfil Corrector)',
+      desc: 'Encargado de subsanar los hallazgos reportados por el Químico Farmacéutico. Revisa las notas escritas sobre los PDF glosados, adjunta la fórmula y los documentos corregidos, y reenvía el expediente a farmacia para su re-verificación.',
+      responsibilities: [
+        'Monitorear la Bandeja de Fórmulas buscando registros en estado "Con Error - Pendiente Corrección".',
+        'Abrir los PDF anotados por el Químico Farmacéutico para identificar exactamente qué se debe corregir.',
+        'Adjuntar la fórmula médica y demás soportes corregidos desde el Expediente Digital.',
+        'Marcar el registro como "Corregido" para devolverlo al Químico Farmacéutico.',
+      ],
+      tip: 'Los documentos con notas del Químico Farmacéutico aparecen con el sufijo "_ANOTADO" en el nombre del archivo.',
+    },
     Consulta: {
       title: 'Guía de Consulta y Auditoría de Lectura',
       desc: 'Diseñado para entes de control, comités de farmacovigilancia o auditores médicos. Posee acceso de solo lectura al dashboard, reportes analíticos y previsualización de datos.',

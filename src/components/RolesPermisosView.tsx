@@ -23,8 +23,8 @@ export default function RolesPermisosView({ onNavigate, onAddAuditLog }: RolesPe
   const [matrix, setMatrix] = useState<Record<string, UserRole[]>>({
     crear_registro: ['Administrador', 'Registro'],
     ver_todos_los_registros: ['Administrador', 'Consulta'],
-    ver_bandeja_propia: ['QuimicoFarmaceutico', 'Registro'],
-    cambiar_estado: ['Administrador', 'QuimicoFarmaceutico', 'Registro'],
+    ver_bandeja_propia: ['QuimicoFarmaceutico', 'Registro', 'Corrector'],
+    cambiar_estado: ['Administrador', 'QuimicoFarmaceutico', 'Registro', 'Corrector'],
     gestionar_usuarios_y_permisos: ['Administrador'],
     ver_y_exportar_excel_maestro: ['Administrador'],
     ver_dashboard_y_reportes: ['Administrador', 'Consulta', 'QuimicoFarmaceutico', 'Registro'],
@@ -50,6 +50,7 @@ export default function RolesPermisosView({ onNavigate, onAddAuditLog }: RolesPe
     'Administrador',
     'Registro',
     'QuimicoFarmaceutico',
+    'Corrector',
     'Consulta',
   ];
 

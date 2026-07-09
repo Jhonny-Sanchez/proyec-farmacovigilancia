@@ -56,6 +56,16 @@ export const INITIAL_USERS: Usuario[] = [
     fecha_creacion: '2026-05-12',
     creado_por: 'admin',
   },
+  {
+    id_usuario: 'USR-008',
+    nombre_usuario: 'corrector01',
+    nombre_completo: 'Camila Corrales (Corrección de Fórmulas)',
+    contrasena: 'corrector123',
+    rol: 'Corrector',
+    estado_cuenta: 'Activo',
+    fecha_creacion: '2026-07-08',
+    creado_por: 'admin',
+  },
 ];
 
 export const INITIAL_ERRORS: RegistroError[] = [

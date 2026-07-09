@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { obtenerEnlacePDF } from '../dataService';
 import { fechaLocalISO } from '../utils';
+import PdfAnnotatorModal from './PdfAnnotatorModal';
 import {
   Search,
   CheckCircle,
@@ -32,6 +33,7 @@ import {
   ExternalLink,
   Eye,
   Loader2,
+  PenLine,
 } from 'lucide-react';
 
 // Categorías de documentos (las 8)
@@ -119,6 +121,7 @@ export default function RegistrosView({
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
   const [viewerError, setViewerError] = useState('');
+  const [annotating, setAnnotating] = useState(false);
 
   useEffect(() => {
     if (selectedError) {
@@ -186,6 +189,9 @@ export default function RegistrosView({
         filtered = filtered.filter(
           (e) => e.estado_actual === 'CON_ERROR_REGISTRADO' || e.usuario_registro === currentUser.nombre_usuario
         );
+      } else if (currentUser.rol === 'Corrector') {
+        // El Corrector ve las fórmulas glosadas pendientes de corrección
+        filtered = filtered.filter((e) => e.estado_actual === 'CON_ERROR_REGISTRADO');
       } else if (currentUser.rol === 'QuimicoFarmaceutico') {
         filtered = filtered.filter(
           (e) => e.estado_actual === 'ENTREGADO_QF' || e.estado_actual === 'CORREGIDA_PENDIENTE_VERIFICACION'
@@ -756,7 +762,7 @@ export default function RegistrosView({
                     </p>
                   </div>
 
-                  {(currentUser.rol === 'Registro' || currentUser.rol === 'Administrador') && (
+                  {(currentUser.rol === 'Registro' || currentUser.rol === 'Corrector' || currentUser.rol === 'Administrador') && (
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         id="toggle-attach-form-btn"
@@ -992,10 +998,10 @@ export default function RegistrosView({
                 {/* WORKFLOW PHASE B: Registry Corrects */}
                 {selectedError.estado_actual === 'CON_ERROR_REGISTRADO' && (
                   <div className="space-y-4">
-                    {currentUser.rol === 'Registro' || currentUser.rol === 'Administrador' ? (
+                    {currentUser.rol === 'Registro' || currentUser.rol === 'Corrector' || currentUser.rol === 'Administrador' ? (
                       <div className="bg-[#0B1120] border border-[#1F2937] rounded-lg p-4 space-y-3">
                         <div className="border-b border-[#1F2937] pb-2">
-                          <span className="text-xs font-bold text-amber-400 block">Corrección por Personal de Registro</span>
+                          <span className="text-xs font-bold text-amber-400 block">Corrección de la Fórmula (Registro / Corrector)</span>
                           <span className="text-[11px] text-[#9CA3AF]">
                             Revise la observación de la glosa, cargue las correcciones de los archivos con error en el panel de <strong>Expediente Digital</strong>, y retorne a farmacia para su aprobación.
                           </span>
@@ -1129,7 +1135,7 @@ export default function RegistrosView({
       {/* ----------------- VISOR DE PDF REAL ----------------- */}
       {activeViewDoc && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
-          <div className="relative bg-[#0F172A] border border-[#1E293B] rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col my-8 overflow-hidden max-h-[90vh]">
+          <div className="relative bg-[#0F172A] border border-[#1E293B] rounded-2xl w-[97vw] max-w-[1500px] h-[95vh] shadow-2xl flex flex-col overflow-hidden">
             {/* Header */}
             <div className="bg-[#1E293B] px-6 py-4 flex items-center justify-between border-b border-[#334155]">
               <div className="flex items-center gap-3">
@@ -1144,6 +1150,17 @@ export default function RegistrosView({
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {viewerUrl && (currentUser.rol === 'QuimicoFarmaceutico' || currentUser.rol === 'Administrador') && (
+                  <button
+                    id="btn-anotar-pdf"
+                    onClick={() => setAnnotating(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                    title="Escribir notas sobre el PDF y reemplazar el original"
+                  >
+                    <PenLine className="w-4 h-4" />
+                    <span>Escribir sobre el PDF</span>
+                  </button>
+                )}
                 {viewerUrl && (
                   <button
                     onClick={() => window.open(viewerUrl, '_blank')}
@@ -1184,17 +1201,11 @@ export default function RegistrosView({
               )}
 
               {viewerUrl && !viewerLoading && (
-                <div className="w-full flex flex-col gap-4">
-                  <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs p-3 rounded-lg flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                    <span>Documento PDF cargado de forma segura. El enlace es temporal y expira por seguridad.</span>
-                  </div>
-                  <iframe
-                    src={viewerUrl}
-                    className="w-full h-[600px] border border-[#1E293B] rounded-xl bg-white"
-                    title="Visor PDF"
-                  />
-                </div>
+                <iframe
+                  src={viewerUrl}
+                  className="w-full h-full flex-1 border border-[#1E293B] rounded-xl bg-white"
+                  title="Visor PDF"
+                />
               )}
             </div>
 
@@ -1214,6 +1225,27 @@ export default function RegistrosView({
         </div>
       )}
 
+      {/* ----------------- ANOTADOR DE PDF (QF escribe sobre el documento) ----------------- */}
+      {annotating && activeViewDoc && selectedError && (
+        <PdfAnnotatorModal
+          doc={activeViewDoc.doc}
+          idRegistro={selectedError.id_registro}
+          tipo={activeViewDoc.category}
+          usuario={currentUser.nombre_usuario}
+          onClose={() => setAnnotating(false)}
+          onSaved={(camposDoc) => {
+            const categoria = activeViewDoc.category;
+            const arrActualizado = ((selectedError[categoria] as DocumentoAdjunto[]) || []).map((d) =>
+              d.id_documento === activeViewDoc.doc.id_documento ? { ...d, ...camposDoc } : d
+            );
+            const updatedFields: Partial<RegistroError> = { [categoria]: arrActualizado };
+            onUpdateErrorStatus(selectedError.id_registro, selectedError.estado_actual, updatedFields);
+            onSelectError({ ...selectedError, ...updatedFields });
+            setAnnotating(false);
+            closeViewer();
+          }}
+        />
+      )}
     </div>
   );
 }
