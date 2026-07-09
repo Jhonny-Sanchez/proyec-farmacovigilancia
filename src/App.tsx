@@ -2,7 +2,27 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { fetchErrores, insertError, updateError } from './dataService';
+import {
+  fetchErrores,
+  insertError,
+  updateError,
+  fetchUsuarios,
+  insertUsuario,
+  updateUsuario,
+  seedUsuarios,
+  fetchProgramaciones,
+  insertProgramacion,
+  updateProgramacion,
+  deleteProgramacion,
+  fetchVolumenes,
+  insertVolumen,
+  fetchAuditLogs,
+  insertAuditLog,
+  fetchMedicos,
+  insertMedico,
+  deleteMedico,
+  seedMedicos,
+} from './dataService';
 import { fechaLocalISO } from './utils';
 import React, { useState, useEffect } from 'react';
 import {
@@ -143,17 +163,35 @@ export default function App() {
       localStorage.removeItem('onco_current_user');
     }
   }, [currentUser]);
+  // Cargar todos los datos desde Supabase al iniciar.
+  // Si una tabla está vacía o aún no existe, se conserva el respaldo local.
   useEffect(() => {
-  fetchErrores().then((data) => {
-    if (data.length > 0) {
-      setErrors(data);
-    }
-  });
-}, []);
+    fetchErrores().then((data) => {
+      if (data.length > 0) setErrors(data);
+    });
+    fetchUsuarios().then((data) => {
+      if (data.length > 0) setUsers(data);
+      else seedUsuarios(INITIAL_USERS); // primera vez: siembra las cuentas base
+    });
+    fetchProgramaciones().then((data) => {
+      if (data.length > 0) setProgramaciones(data);
+    });
+    fetchVolumenes().then((data) => {
+      if (data.length > 0) setVolumes(data);
+    });
+    fetchAuditLogs().then((data) => {
+      if (data.length > 0) setAuditLogs(data);
+    });
+    fetchMedicos().then((data) => {
+      if (data.length > 0) setMedicos(data);
+      else seedMedicos(MEDICOS_CATALOG); // primera vez: siembra el catálogo base
+    });
+  }, []);
 
   // Operational scheduling handlers
   const handleAddProgramacion = (newProg: ProgramacionCita) => {
     setProgramaciones((prev) => [newProg, ...prev]);
+    insertProgramacion(newProg);
     addAuditLog(
       'Creación Programación',
       `Agendó sesión para paciente ${newProg.nombre_paciente} ${newProg.apellidos_paciente} (C.C. ${newProg.numero_documento}) para el Ciclo ${newProg.ciclo_actual}, Día ${newProg.dia_aplicacion} el día ${newProg.fecha_aplicacion}.`
@@ -166,6 +204,7 @@ export default function App() {
         p.id_programacion === id ? { ...p, estado_programacion: nuevoEstado } : p
       )
     );
+    updateProgramacion(id, { estado_programacion: nuevoEstado });
     const item = programaciones.find((p) => p.id_programacion === id);
     if (item) {
       addAuditLog(
@@ -183,6 +222,7 @@ export default function App() {
           : p
       )
     );
+    updateProgramacion(id, { confirmacion_paciente: confirmacion, motivo_desacuerdo: motivo });
     const item = programaciones.find((p) => p.id_programacion === id);
     if (item) {
       addAuditLog(
@@ -195,6 +235,7 @@ export default function App() {
   const handleDeleteProgramacion = (id: string) => {
     const item = programaciones.find((p) => p.id_programacion === id);
     setProgramaciones((prev) => prev.filter((p) => p.id_programacion !== id));
+    deleteProgramacion(id);
     if (item) {
       addAuditLog(
         'Eliminación Programación',
@@ -214,7 +255,9 @@ export default function App() {
     const sc = String(now.getSeconds()).padStart(2, '0');
 
     const newLog: AuditLog = {
-      id: `LOG-${String(auditLogs.length + 1).padStart(3, '0')}`,
+      // Id único por marca de tiempo: evita choques de clave primaria
+      // cuando varios equipos escriben en la misma base de datos.
+      id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       fecha: `${yr}-${mo}-${dy}`,
       hora: `${hr}:${mn}:${sc}`,
       usuario: currentUser ? currentUser.nombre_usuario : 'Invitado',
@@ -222,6 +265,7 @@ export default function App() {
       detalle: detail,
     };
     setAuditLogs((prev) => [newLog, ...prev]);
+    insertAuditLog(newLog);
   };
 
   // 3. Authenticate user
@@ -262,7 +306,7 @@ export default function App() {
     const logTime = `${fechaLocalISO(now)} ${now.toTimeString().split(' ')[0]}`;
     // Directly append log using current values to avoid waiting state cycle
     const newLog: AuditLog = {
-      id: `LOG-${String(auditLogs.length + 1).padStart(3, '0')}`,
+      id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       fecha: fechaLocalISO(now),
       hora: now.toTimeString().split(' ')[0],
       usuario: tempUser,
@@ -270,6 +314,7 @@ export default function App() {
       detalle: `El usuario ${tempUser} inició sesión exitosamente en el sistema en ${logTime}.`,
     };
     setAuditLogs((prev) => [newLog, ...prev]);
+    insertAuditLog(newLog);
 
     setLoginUser('');
     setLoginPass('');
@@ -290,7 +335,7 @@ export default function App() {
         setSelectedError(null);
         const now = new Date();
         const newLog: AuditLog = {
-          id: `LOG-${String(auditLogs.length + 1).padStart(3, '0')}`,
+          id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           fecha: fechaLocalISO(now),
           hora: now.toTimeString().split(' ')[0],
           usuario: matched.nombre_usuario,
@@ -298,6 +343,7 @@ export default function App() {
           detalle: `Inicio de sesión rápido asistido de prueba para rol: ${matched.rol}`,
         };
         setAuditLogs((prev) => [newLog, ...prev]);
+        insertAuditLog(newLog);
       }
     }, 100);
   };
@@ -365,6 +411,7 @@ export default function App() {
   // Create new user account (Admin only)
   const handleAddUser = (newUser: Usuario) => {
     setUsers((prev) => [...prev, newUser]);
+    insertUsuario(newUser);
     addAuditLog('Gestión Usuarios', `Creó la cuenta de usuario ${newUser.nombre_usuario} (${newUser.rol}).`);
   };
 
@@ -374,11 +421,13 @@ export default function App() {
       if (prev.includes(nuevoMedico)) return prev;
       return [...prev, nuevoMedico];
     });
+    insertMedico(nuevoMedico);
     addAuditLog('Gestión Médicos', `Registró al nuevo médico prescriptor: ${nuevoMedico}.`);
   };
 
   const handleDeleteMedico = (medicoEliminar: string) => {
     setMedicos((prev) => prev.filter((m) => m !== medicoEliminar));
+    deleteMedico(medicoEliminar);
     addAuditLog('Gestión Médicos', `Eliminó al médico prescriptor: ${medicoEliminar}.`);
   };
 
@@ -387,6 +436,7 @@ export default function App() {
     setUsers((prev) =>
       prev.map((u) => (u.id_usuario === id_usuario ? { ...u, estado_cuenta: status } : u))
     );
+    updateUsuario(id_usuario, { estado_cuenta: status });
     const targetUsr = users.find((u) => u.id_usuario === id_usuario)?.nombre_usuario || id_usuario;
     addAuditLog('Gestión Usuarios', `Actualizó el estado de la cuenta ${targetUsr} a: ${status}.`);
   };
@@ -396,6 +446,7 @@ export default function App() {
     setUsers((prev) =>
       prev.map((u) => (u.id_usuario === id_usuario ? { ...u, rol: role } : u))
     );
+    updateUsuario(id_usuario, { rol: role });
     const targetUsr = users.find((u) => u.id_usuario === id_usuario)?.nombre_usuario || id_usuario;
     addAuditLog('Gestión Usuarios', `Modificó el rol de cuenta de ${targetUsr} hacia: ${role}.`);
   };
@@ -403,6 +454,7 @@ export default function App() {
   // Log formula volumes totals (denominators)
   const handleAddVolume = (newVol: VolumenFormulas) => {
     setVolumes((prev) => [...prev, newVol]);
+    insertVolumen(newVol);
     addAuditLog('Carga Denominadores', `Registró ${newVol.cantidad_formulas_validadas} fórmulas validadas totales para la EPS ${newVol.eps}.`);
   };
 

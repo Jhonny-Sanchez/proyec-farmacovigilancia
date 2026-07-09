@@ -1,5 +1,7 @@
 import { supabase } from './supabaseClient';
-import { RegistroError } from './types';
+import { RegistroError, Usuario, ProgramacionCita, VolumenFormulas, AuditLog } from './types';
+
+// ============ REGISTROS DE ERROR ============
 
 // Traer todos los registros de error desde Supabase
 export async function fetchErrores(): Promise<RegistroError[]> {
@@ -30,6 +32,154 @@ export async function updateError(id: string, camposActualizados: Partial<Regist
 
   if (error) console.error('Error al actualizar registro:', error);
 }
+
+// ============ USUARIOS ============
+
+export async function fetchUsuarios(): Promise<Usuario[]> {
+  const { data, error } = await supabase
+    .from('usuarios')
+    .select('*')
+    .order('fecha_creacion', { ascending: true });
+
+  if (error) {
+    console.error('Error al leer usuarios:', error);
+    return [];
+  }
+  return data as Usuario[];
+}
+
+export async function insertUsuario(nuevoUsuario: Usuario) {
+  const { error } = await supabase.from('usuarios').insert([nuevoUsuario]);
+  if (error) console.error('Error al insertar usuario:', error);
+}
+
+export async function updateUsuario(id_usuario: string, campos: Partial<Usuario>) {
+  const { error } = await supabase.from('usuarios').update(campos).eq('id_usuario', id_usuario);
+  if (error) console.error('Error al actualizar usuario:', error);
+}
+
+// Siembra las cuentas base la primera vez que la tabla está vacía
+export async function seedUsuarios(iniciales: Usuario[]) {
+  const { error } = await supabase
+    .from('usuarios')
+    .upsert(iniciales, { onConflict: 'id_usuario', ignoreDuplicates: true });
+  if (error) console.error('Error al sembrar usuarios iniciales:', error);
+}
+
+// ============ PROGRAMACIÓN DE CITAS ============
+
+export async function fetchProgramaciones(): Promise<ProgramacionCita[]> {
+  const { data, error } = await supabase
+    .from('programaciones_citas')
+    .select('*')
+    .order('creado_en', { ascending: false });
+
+  if (error) {
+    console.error('Error al leer programaciones:', error);
+    return [];
+  }
+  return data as ProgramacionCita[];
+}
+
+export async function insertProgramacion(nueva: ProgramacionCita) {
+  const { error } = await supabase.from('programaciones_citas').insert([nueva]);
+  if (error) console.error('Error al insertar programación:', error);
+}
+
+export async function updateProgramacion(id: string, campos: Partial<ProgramacionCita>) {
+  const { error } = await supabase
+    .from('programaciones_citas')
+    .update(campos)
+    .eq('id_programacion', id);
+  if (error) console.error('Error al actualizar programación:', error);
+}
+
+export async function deleteProgramacion(id: string) {
+  const { error } = await supabase
+    .from('programaciones_citas')
+    .delete()
+    .eq('id_programacion', id);
+  if (error) console.error('Error al eliminar programación:', error);
+}
+
+// ============ VOLÚMENES DE FÓRMULAS (DENOMINADORES) ============
+
+export async function fetchVolumenes(): Promise<VolumenFormulas[]> {
+  const { data, error } = await supabase
+    .from('volumenes_formulas')
+    .select('*')
+    .order('fecha', { ascending: true });
+
+  if (error) {
+    console.error('Error al leer volúmenes:', error);
+    return [];
+  }
+  return data as VolumenFormulas[];
+}
+
+export async function insertVolumen(nuevo: VolumenFormulas) {
+  const { error } = await supabase.from('volumenes_formulas').insert([nuevo]);
+  if (error) console.error('Error al insertar volumen:', error);
+}
+
+// ============ AUDIT LOG (INMUTABLE) ============
+
+export async function fetchAuditLogs(): Promise<AuditLog[]> {
+  const { data, error } = await supabase
+    .from('audit_logs')
+    .select('*')
+    .order('creado_en', { ascending: false })
+    .limit(500);
+
+  if (error) {
+    console.error('Error al leer audit log:', error);
+    return [];
+  }
+  return data as AuditLog[];
+}
+
+export async function insertAuditLog(log: AuditLog) {
+  const { error } = await supabase.from('audit_logs').insert([log]);
+  if (error) console.error('Error al insertar audit log:', error);
+}
+
+// ============ CATÁLOGO DE MÉDICOS ============
+
+export async function fetchMedicos(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('medicos')
+    .select('nombre')
+    .order('nombre', { ascending: true });
+
+  if (error) {
+    console.error('Error al leer médicos:', error);
+    return [];
+  }
+  return (data as { nombre: string }[]).map((m) => m.nombre);
+}
+
+export async function insertMedico(nombre: string) {
+  const { error } = await supabase
+    .from('medicos')
+    .upsert([{ nombre }], { onConflict: 'nombre', ignoreDuplicates: true });
+  if (error) console.error('Error al insertar médico:', error);
+}
+
+export async function deleteMedico(nombre: string) {
+  const { error } = await supabase.from('medicos').delete().eq('nombre', nombre);
+  if (error) console.error('Error al eliminar médico:', error);
+}
+
+// Siembra el catálogo base de médicos la primera vez
+export async function seedMedicos(nombres: string[]) {
+  const { error } = await supabase
+    .from('medicos')
+    .upsert(nombres.map((nombre) => ({ nombre })), { onConflict: 'nombre', ignoreDuplicates: true });
+  if (error) console.error('Error al sembrar médicos iniciales:', error);
+}
+
+// ============ STORAGE DE DOCUMENTOS PDF ============
+
 // Subir un archivo PDF al bucket "documentos" y devolver su ruta
 export async function subirPDF(file: File, idRegistro: string, tipo: string): Promise<string | null> {
   // Crear una ruta única: idRegistro/tipo/timestamp_nombre.pdf

@@ -81,7 +81,7 @@ export default function UsuariosView({
     }
 
     const newUser: Usuario = {
-      id_usuario: `USR-${String(users.length + 1).padStart(3, '0')}`,
+      id_usuario: `USR-${Date.now()}`,
       nombre_usuario: username.trim().toLowerCase(),
       nombre_completo: fullname.trim(),
       contrasena: password,

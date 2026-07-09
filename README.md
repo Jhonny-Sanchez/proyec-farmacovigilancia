@@ -10,6 +10,7 @@ Sistema de trazabilidad de errores en fórmulas médicas oncológicas: registro 
 - Un proyecto de Supabase con:
   - Tabla `registros_error` (columnas equivalentes a la interfaz `RegistroError` de [src/types.ts](src/types.ts), con `historial_estados` y las listas de documentos como `jsonb`, y `creado_en timestamptz default now()`)
   - Bucket de Storage llamado `documentos`
+  - El script [supabase/setup.sql](supabase/setup.sql) ejecutado en el SQL Editor del panel (crea las tablas de usuarios, citas, denominadores, auditoría y médicos, y activa las políticas RLS de seguridad)
 
 ## Configuración local
 
@@ -39,13 +40,17 @@ La carpeta `dist/` es un sitio estático: se puede desplegar en Vercel, Netlify,
 
 ## Qué se guarda en Supabase
 
-- **Registros de error** (`registros_error`): creación, cambios de estado con historial y documentos adjuntos.
+Todo el estado de la aplicación se guarda en Supabase y se comparte entre equipos:
+
+- **Registros de error** (`registros_error`): creación, cambios de estado con historial y documentos adjuntos. Sin borrado (protegido por RLS).
+- **Usuarios** (`usuarios`): cuentas y roles. La primera vez que la tabla está vacía, la app siembra las cuentas base automáticamente.
+- **Citas** (`programaciones_citas`), **denominadores** (`volumenes_formulas`), **médicos** (`medicos`).
+- **Audit log** (`audit_logs`): inmutable — las políticas RLS impiden editarlo o borrarlo.
 - **PDFs** (bucket `documentos`): se suben con ruta `id_registro/tipo/timestamp_nombre.pdf` y se leen mediante enlaces firmados temporales (5 minutos).
 
-Los usuarios, citas, denominadores y audit log se guardan por ahora en `localStorage` del navegador.
+`localStorage` se usa solo como caché/respaldo local si Supabase no responde. La sesión activa es local de cada navegador.
 
 ## Pendientes recomendados antes de uso productivo
 
-1. **Restringir RLS en Supabase**: actualmente la clave pública permite insertar, leer, actualizar y borrar en `registros_error`. Se recomienda activar políticas que limiten borrado/actualización a usuarios autenticados.
-2. **Autenticación real**: el login actual es simulado (usuarios y contraseñas en el código/localStorage). Migrar a Supabase Auth.
-3. **Migrar a Supabase** usuarios, citas, denominadores y audit log para que sean compartidos entre equipos.
+1. **Autenticación real**: el login actual es simulado (usuarios y contraseñas en la tabla `usuarios` en texto plano). Migrar a Supabase Auth.
+2. Con Supabase Auth activo, endurecer las políticas de [supabase/setup.sql](supabase/setup.sql) cambiando `to anon, authenticated` por `to authenticated`.

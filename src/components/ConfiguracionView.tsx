@@ -47,7 +47,7 @@ export default function ConfiguracionView({
     }
 
     const newVolume: VolumenFormulas = {
-      id: `VOL-${String(volumes.length + 1).padStart(3, '0')}`,
+      id: `VOL-${Date.now()}`,
       fecha: date,
       eps,
       medico,
