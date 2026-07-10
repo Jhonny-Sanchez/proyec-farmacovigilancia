@@ -4,8 +4,10 @@ import { fechaLocalISO } from './utils';
 
 // ============ REGISTROS DE ERROR ============
 
-// Traer todos los registros de error desde Supabase
-export async function fetchErrores(): Promise<RegistroError[]> {
+// Traer todos los registros de error desde Supabase.
+// Devuelve null si la lectura FALLA (para conservar el respaldo local);
+// una lista vacía significa que la base realmente está vacía.
+export async function fetchErrores(): Promise<RegistroError[] | null> {
   const { data, error } = await supabase
     .from('registros_error')
     .select('*')
@@ -13,7 +15,7 @@ export async function fetchErrores(): Promise<RegistroError[]> {
 
   if (error) {
     console.error('Error al leer registros:', error);
-    return [];
+    return null;
   }
   return data as RegistroError[];
 }
@@ -69,7 +71,7 @@ export async function seedUsuarios(iniciales: Usuario[]) {
 
 // ============ PROGRAMACIÓN DE CITAS ============
 
-export async function fetchProgramaciones(): Promise<ProgramacionCita[]> {
+export async function fetchProgramaciones(): Promise<ProgramacionCita[] | null> {
   const { data, error } = await supabase
     .from('programaciones_citas')
     .select('*')
@@ -77,7 +79,7 @@ export async function fetchProgramaciones(): Promise<ProgramacionCita[]> {
 
   if (error) {
     console.error('Error al leer programaciones:', error);
-    return [];
+    return null;
   }
   return data as ProgramacionCita[];
 }
@@ -105,7 +107,7 @@ export async function deleteProgramacion(id: string) {
 
 // ============ VOLÚMENES DE FÓRMULAS (DENOMINADORES) ============
 
-export async function fetchVolumenes(): Promise<VolumenFormulas[]> {
+export async function fetchVolumenes(): Promise<VolumenFormulas[] | null> {
   const { data, error } = await supabase
     .from('volumenes_formulas')
     .select('*')
@@ -113,7 +115,7 @@ export async function fetchVolumenes(): Promise<VolumenFormulas[]> {
 
   if (error) {
     console.error('Error al leer volúmenes:', error);
-    return [];
+    return null;
   }
   return data as VolumenFormulas[];
 }
@@ -125,7 +127,7 @@ export async function insertVolumen(nuevo: VolumenFormulas) {
 
 // ============ AUDIT LOG (INMUTABLE) ============
 
-export async function fetchAuditLogs(): Promise<AuditLog[]> {
+export async function fetchAuditLogs(): Promise<AuditLog[] | null> {
   const { data, error } = await supabase
     .from('audit_logs')
     .select('*')
@@ -134,7 +136,7 @@ export async function fetchAuditLogs(): Promise<AuditLog[]> {
 
   if (error) {
     console.error('Error al leer audit log:', error);
-    return [];
+    return null;
   }
   return data as AuditLog[];
 }

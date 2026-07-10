@@ -46,13 +46,7 @@ import {
   MEDICOS_CATALOG,
   TIPOS_DE_ERROR_CATALOG,
 } from './types';
-import {
-  INITIAL_USERS,
-  INITIAL_ERRORS,
-  INITIAL_VOLUMES,
-  INITIAL_AUDIT_LOG,
-  INITIAL_PROGRAMACIONES,
-} from './initialData';
+import { INITIAL_USERS } from './initialData';
 
 // Component imports
 import DashboardView from './components/DashboardView';
@@ -97,19 +91,21 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_USERS;
   });
 
+  // El sistema arranca vacío: la única fuente de datos es Supabase
+  // (localStorage funciona solo como caché de la última lectura).
   const [errors, setErrors] = useState<RegistroError[]>(() => {
     const saved = localStorage.getItem('onco_errors');
-    return saved ? JSON.parse(saved) : INITIAL_ERRORS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [volumes, setVolumes] = useState<VolumenFormulas[]>(() => {
     const saved = localStorage.getItem('onco_volumes');
-    return saved ? JSON.parse(saved) : INITIAL_VOLUMES;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
     const saved = localStorage.getItem('onco_audit_logs');
-    return saved ? JSON.parse(saved) : INITIAL_AUDIT_LOG;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [currentUser, setCurrentUser] = useState<Usuario | null>(() => {
@@ -119,7 +115,7 @@ export default function App() {
 
   const [programaciones, setProgramaciones] = useState<ProgramacionCita[]>(() => {
     const saved = localStorage.getItem('onco_programaciones');
-    return saved ? JSON.parse(saved) : INITIAL_PROGRAMACIONES;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [medicos, setMedicos] = useState<string[]>(() => {
@@ -196,9 +192,11 @@ export default function App() {
   useEffect(() => {
     // Política de retención: primero se eliminan los PDF de registros
     // gestionados hace más de 4 meses y luego se cargan los datos al día.
+    // Un resultado null significa fallo de lectura (se conserva la caché);
+    // una lista vacía significa que la base realmente está vacía.
     limpiarPdfsVencidos().finally(() => {
       fetchErrores().then((data) => {
-        if (data.length > 0) setErrors(data);
+        if (data) setErrors(data);
       });
     });
     // Se siembran las cuentas base ANTES de leer: el upsert ignora las que ya
@@ -209,13 +207,13 @@ export default function App() {
         if (data.length > 0) setUsers(data);
       });
     fetchProgramaciones().then((data) => {
-      if (data.length > 0) setProgramaciones(data);
+      if (data) setProgramaciones(data);
     });
     fetchVolumenes().then((data) => {
-      if (data.length > 0) setVolumes(data);
+      if (data) setVolumes(data);
     });
     fetchAuditLogs().then((data) => {
-      if (data.length > 0) setAuditLogs(data);
+      if (data) setAuditLogs(data);
     });
     fetchMedicos().then((data) => {
       if (data.length > 0) setMedicos(data);
