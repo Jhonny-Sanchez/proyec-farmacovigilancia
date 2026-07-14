@@ -9,6 +9,7 @@ import {
   fetchUsuarios,
   insertUsuario,
   updateUsuario,
+  deleteUsuario,
   seedUsuarios,
   fetchProgramaciones,
   insertProgramacion,
@@ -60,6 +61,7 @@ import AuditLogView from './components/AuditLogView';
 import ConfiguracionView from './components/ConfiguracionView';
 import GuiaUsuarioView from './components/GuiaUsuarioView';
 import ProgramacionCitasView from './components/ProgramacionCitasView';
+import CambiarClaveModal from './components/CambiarClaveModal';
 
 // Icon imports
 import {
@@ -82,6 +84,7 @@ import {
   Lock,
   BookOpen,
   Calendar,
+  KeyRound,
 } from 'lucide-react';
 
 export default function App() {
@@ -147,6 +150,9 @@ export default function App() {
   // Notification list panel toggle
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
 
+  // Security modal: change own password
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+
   // Sync back to local storage
   useEffect(() => {
     localStorage.setItem('onco_users', JSON.stringify(users));
@@ -199,13 +205,18 @@ export default function App() {
         if (data) setErrors(data);
       });
     });
-    // Se siembran las cuentas base ANTES de leer: el upsert ignora las que ya
-    // existen y garantiza que roles nuevos (ej. Corrector) aparezcan en la base.
-    seedUsuarios(INITIAL_USERS)
-      .then(() => fetchUsuarios())
-      .then((data) => {
-        if (data.length > 0) setUsers(data);
-      });
+    // Las cuentas base solo se siembran cuando la tabla está VACÍA (primera
+    // instalación). Así, los usuarios eliminados por el Administrador no
+    // "reviven" al recargar la aplicación.
+    fetchUsuarios().then(async (data) => {
+      if (data.length > 0) {
+        setUsers(data);
+      } else {
+        await seedUsuarios(INITIAL_USERS);
+        const sembrados = await fetchUsuarios();
+        if (sembrados.length > 0) setUsers(sembrados);
+      }
+    });
     fetchProgramaciones().then((data) => {
       if (data) setProgramaciones(data);
     });
@@ -503,6 +514,38 @@ export default function App() {
     addAuditLog('Gestión Protocolos', `Eliminó el protocolo oncológico: ${nombreProtocolo}.`);
   };
 
+  // Delete a user account permanently (Admin only).
+  // Protections: the main 'admin' account and the session's own account
+  // can never be deleted (also enforced in the UI and by the RLS policy).
+  const handleDeleteUser = (id_usuario: string) => {
+    const target = users.find((u) => u.id_usuario === id_usuario);
+    if (!target) return;
+    if (target.nombre_usuario === 'admin') return;
+    if (currentUser && currentUser.id_usuario === id_usuario) return;
+
+    setUsers((prev) => prev.filter((u) => u.id_usuario !== id_usuario));
+    deleteUsuario(id_usuario);
+    addAuditLog(
+      'Gestión Usuarios',
+      `Eliminó definitivamente la cuenta de usuario ${target.nombre_usuario} (${target.nombre_completo} - ${target.rol}) del sistema. Su trazabilidad histórica en registros y auditoría se conserva.`
+    );
+  };
+
+  // Change own password (every logged-in user, security requirement)
+  const handleChangePassword = (nuevaClave: string) => {
+    if (!currentUser) return;
+    const id = currentUser.id_usuario;
+    setUsers((prev) =>
+      prev.map((u) => (u.id_usuario === id ? { ...u, contrasena: nuevaClave } : u))
+    );
+    setCurrentUser((prev) => (prev ? { ...prev, contrasena: nuevaClave } : prev));
+    updateUsuario(id, { contrasena: nuevaClave });
+    addAuditLog(
+      'Cambio de Contraseña',
+      `El usuario ${currentUser.nombre_usuario} actualizó su propia contraseña de acceso por seguridad.`
+    );
+  };
+
   // Toggle user active status (Admin only)
   const handleUpdateUserStatus = (id_usuario: string, status: AccountStatus) => {
     setUsers((prev) =>
@@ -670,6 +713,7 @@ export default function App() {
             onAddUser={handleAddUser}
             onUpdateUserStatus={handleUpdateUserStatus}
             onUpdateUserRole={handleUpdateUserRole}
+            onDeleteUser={handleDeleteUser}
             onNavigate={setActivePage}
             medicos={medicos}
             onAddMedico={handleAddMedico}
@@ -1112,6 +1156,16 @@ export default function App() {
           </div>
 
           <button
+            id="sidebar-change-password-btn"
+            onClick={() => setShowPasswordModal(true)}
+            className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg border border-[#1F2937] text-[#9CA3AF] hover:text-[#22D3EE] hover:bg-cyan-500/5 hover:border-cyan-500/10 transition text-xs font-bold"
+            title="Cambiar mi contraseña de acceso"
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            Cambiar Contraseña
+          </button>
+
+          <button
             id="sidebar-logout-btn"
             onClick={handleLogout}
             className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg border border-[#1F2937] text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-500/5 hover:border-red-500/10 transition text-xs font-bold"
@@ -1210,6 +1264,14 @@ export default function App() {
               <span className="text-[11px] text-[#9CA3AF] hidden sm:inline font-mono font-bold bg-[#0B1120] px-2 py-1 rounded border border-[#1F2937]">
                 {currentUser.nombre_usuario}
               </span>
+              <button
+                id="header-change-password-btn"
+                onClick={() => setShowPasswordModal(true)}
+                className="p-1.5 rounded-lg hover:bg-cyan-500/10 text-[#9CA3AF] hover:text-[#22D3EE] transition md:hidden"
+                title="Cambiar mi contraseña"
+              >
+                <KeyRound className="w-4 h-4" />
+              </button>
               <button
                 id="header-logout-btn"
                 onClick={handleLogout}
@@ -1343,6 +1405,15 @@ export default function App() {
           {renderPage()}
         </main>
       </div>
+
+      {/* Security modal: every user can change their own password */}
+      {showPasswordModal && (
+        <CambiarClaveModal
+          currentUser={currentUser}
+          onChangePassword={handleChangePassword}
+          onClose={() => setShowPasswordModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -14,6 +14,7 @@ interface UsuariosViewProps {
   onAddUser: (user: Usuario) => void;
   onUpdateUserStatus: (id_usuario: string, status: AccountStatus) => void;
   onUpdateUserRole: (id_usuario: string, role: UserRole) => void;
+  onDeleteUser: (id_usuario: string) => void;
   onNavigate: (page: string) => void;
   medicos: string[];
   onAddMedico: (medico: string) => void;
@@ -32,6 +33,7 @@ export default function UsuariosView({
   onAddUser,
   onUpdateUserStatus,
   onUpdateUserRole,
+  onDeleteUser,
   onNavigate,
   medicos,
   onAddMedico,
@@ -399,22 +401,43 @@ export default function UsuariosView({
                       </td>
                       <td className="p-3 text-right">
                         {user.nombre_usuario !== 'admin' && (
-                          <button
-                            id={`toggle-user-status-${user.id_usuario}`}
-                            onClick={() =>
-                              onUpdateUserStatus(
-                                user.id_usuario,
-                                user.estado_cuenta === 'Activo' ? 'Inactivo' : 'Activo'
-                              )
-                            }
-                            className={`text-xs px-2.5 py-1 rounded transition border font-semibold ${
-                              user.estado_cuenta === 'Activo'
-                                ? 'text-red-400 border-red-400/20 hover:bg-red-500/10'
-                                : 'text-emerald-400 border-emerald-400/20 hover:bg-emerald-500/10'
-                            }`}
-                          >
-                            {user.estado_cuenta === 'Activo' ? 'Desactivar' : 'Activar'}
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              id={`toggle-user-status-${user.id_usuario}`}
+                              onClick={() =>
+                                onUpdateUserStatus(
+                                  user.id_usuario,
+                                  user.estado_cuenta === 'Activo' ? 'Inactivo' : 'Activo'
+                                )
+                              }
+                              className={`text-xs px-2.5 py-1 rounded transition border font-semibold ${
+                                user.estado_cuenta === 'Activo'
+                                  ? 'text-red-400 border-red-400/20 hover:bg-red-500/10'
+                                  : 'text-emerald-400 border-emerald-400/20 hover:bg-emerald-500/10'
+                              }`}
+                            >
+                              {user.estado_cuenta === 'Activo' ? 'Desactivar' : 'Activar'}
+                            </button>
+                            {user.nombre_usuario !== currentUser.nombre_usuario && (
+                              <button
+                                id={`delete-user-${user.id_usuario}`}
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `¿Está seguro que desea ELIMINAR DEFINITIVAMENTE la cuenta de ${user.nombre_completo} (${user.nombre_usuario})?\n\nEsta acción no se puede deshacer y el usuario ya no podrá ingresar al sistema. Su trazabilidad histórica en registros y auditoría se conserva.`
+                                    )
+                                  ) {
+                                    onDeleteUser(user.id_usuario);
+                                  }
+                                }}
+                                className="text-xs px-2.5 py-1 rounded transition border font-semibold text-red-400 border-red-400/20 hover:bg-red-500/10 flex items-center gap-1"
+                                title="Eliminar definitivamente esta cuenta (usuario retirado)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Eliminar
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>

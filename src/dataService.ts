@@ -61,6 +61,18 @@ export async function updateUsuario(id_usuario: string, campos: Partial<Usuario>
   if (error) console.error('Error al actualizar usuario:', error);
 }
 
+// Eliminar definitivamente una cuenta de usuario (solo Administrador).
+// Requiere la política RLS "usuarios_delete" (ver supabase/setup.sql).
+// Devuelve true si la eliminación fue aceptada por la base de datos.
+export async function deleteUsuario(id_usuario: string): Promise<boolean> {
+  const { error } = await supabase.from('usuarios').delete().eq('id_usuario', id_usuario);
+  if (error) {
+    console.error('Error al eliminar usuario:', error);
+    return false;
+  }
+  return true;
+}
+
 // Siembra las cuentas base la primera vez que la tabla está vacía
 export async function seedUsuarios(iniciales: Usuario[]) {
   const { error } = await supabase

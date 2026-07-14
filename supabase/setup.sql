@@ -169,10 +169,13 @@ create policy "registros_insert" on registros_error for insert to anon, authenti
 create policy "registros_update" on registros_error for update to anon, authenticated using (true) with check (true);
 -- (sin política de delete: nadie puede borrar registros con la clave pública)
 
--- ---- usuarios: leer, crear y actualizar. PROHIBIDO borrar. ----
+-- ---- usuarios: leer, crear, actualizar y eliminar (gestión del Administrador
+-- desde la app: bajas de personal retirado). La cuenta principal 'admin'
+-- queda protegida: la base de datos rechaza su eliminación siempre. ----
 create policy "usuarios_select" on usuarios for select to anon, authenticated using (true);
 create policy "usuarios_insert" on usuarios for insert to anon, authenticated with check (true);
 create policy "usuarios_update" on usuarios for update to anon, authenticated using (true) with check (true);
+create policy "usuarios_delete" on usuarios for delete to anon, authenticated using (nombre_usuario <> 'admin');
 
 -- ---- programaciones_citas: operación completa (la app permite eliminar citas). ----
 create policy "prog_select" on programaciones_citas for select to anon, authenticated using (true);
