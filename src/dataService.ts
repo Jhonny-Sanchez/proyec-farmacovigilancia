@@ -2,6 +2,25 @@ import { supabase } from './supabaseClient';
 import { RegistroError, Usuario, ProgramacionCita, VolumenFormulas, AuditLog, ProtocoloOncologico, DocumentoAdjunto } from './types';
 import { fechaLocalISO } from './utils';
 
+// ============ NOTIFICACIÓN DE ERRORES DE SINCRONIZACIÓN ============
+
+// Las escrituras son optimistas (la interfaz avanza sin esperar al servidor).
+// Cuando una falla, este canal avisa a la interfaz para mostrar el error al
+// usuario en pantalla en lugar de dejarlo morir en la consola.
+type SyncErrorListener = (mensaje: string) => void;
+let syncErrorListener: SyncErrorListener | null = null;
+
+export function onSyncError(listener: SyncErrorListener | null) {
+  syncErrorListener = listener;
+}
+
+function reportarErrorSync(mensaje: string, error: unknown) {
+  console.error(mensaje, error);
+  if (syncErrorListener) {
+    syncErrorListener(`${mensaje} El dato se conserva en este equipo; verifique su conexión e intente de nuevo.`);
+  }
+}
+
 // ============ REGISTROS DE ERROR ============
 
 // Traer todos los registros de error desde Supabase.
@@ -23,7 +42,7 @@ export async function fetchErrores(): Promise<RegistroError[] | null> {
 // Guardar un nuevo registro de error
 export async function insertError(nuevoError: RegistroError) {
   const { error } = await supabase.from('registros_error').insert([nuevoError]);
-  if (error) console.error('Error al insertar registro:', error);
+  if (error) reportarErrorSync('No se pudo guardar el registro en el servidor.', error);
 }
 
 // Actualizar un registro existente (cambios de estado, documentos, etc.)
@@ -33,7 +52,7 @@ export async function updateError(id: string, camposActualizados: Partial<Regist
     .update(camposActualizados)
     .eq('id_registro', id);
 
-  if (error) console.error('Error al actualizar registro:', error);
+  if (error) reportarErrorSync('No se pudo actualizar el registro en el servidor.', error);
 }
 
 // ============ USUARIOS ============
@@ -53,12 +72,12 @@ export async function fetchUsuarios(): Promise<Usuario[]> {
 
 export async function insertUsuario(nuevoUsuario: Usuario) {
   const { error } = await supabase.from('usuarios').insert([nuevoUsuario]);
-  if (error) console.error('Error al insertar usuario:', error);
+  if (error) reportarErrorSync('No se pudo guardar la cuenta de usuario en el servidor.', error);
 }
 
 export async function updateUsuario(id_usuario: string, campos: Partial<Usuario>) {
   const { error } = await supabase.from('usuarios').update(campos).eq('id_usuario', id_usuario);
-  if (error) console.error('Error al actualizar usuario:', error);
+  if (error) reportarErrorSync('No se pudo actualizar la cuenta de usuario en el servidor.', error);
 }
 
 // Eliminar definitivamente una cuenta de usuario (solo Administrador).
@@ -67,7 +86,7 @@ export async function updateUsuario(id_usuario: string, campos: Partial<Usuario>
 export async function deleteUsuario(id_usuario: string): Promise<boolean> {
   const { error } = await supabase.from('usuarios').delete().eq('id_usuario', id_usuario);
   if (error) {
-    console.error('Error al eliminar usuario:', error);
+    reportarErrorSync('No se pudo eliminar la cuenta de usuario en el servidor.', error);
     return false;
   }
   return true;
@@ -98,7 +117,7 @@ export async function fetchProgramaciones(): Promise<ProgramacionCita[] | null> 
 
 export async function insertProgramacion(nueva: ProgramacionCita) {
   const { error } = await supabase.from('programaciones_citas').insert([nueva]);
-  if (error) console.error('Error al insertar programación:', error);
+  if (error) reportarErrorSync('No se pudo guardar la programación de la cita en el servidor.', error);
 }
 
 export async function updateProgramacion(id: string, campos: Partial<ProgramacionCita>) {
@@ -106,7 +125,7 @@ export async function updateProgramacion(id: string, campos: Partial<Programacio
     .from('programaciones_citas')
     .update(campos)
     .eq('id_programacion', id);
-  if (error) console.error('Error al actualizar programación:', error);
+  if (error) reportarErrorSync('No se pudo actualizar la programación de la cita en el servidor.', error);
 }
 
 export async function deleteProgramacion(id: string) {
@@ -114,7 +133,7 @@ export async function deleteProgramacion(id: string) {
     .from('programaciones_citas')
     .delete()
     .eq('id_programacion', id);
-  if (error) console.error('Error al eliminar programación:', error);
+  if (error) reportarErrorSync('No se pudo eliminar la programación de la cita en el servidor.', error);
 }
 
 // ============ VOLÚMENES DE FÓRMULAS (DENOMINADORES) ============
@@ -134,7 +153,7 @@ export async function fetchVolumenes(): Promise<VolumenFormulas[] | null> {
 
 export async function insertVolumen(nuevo: VolumenFormulas) {
   const { error } = await supabase.from('volumenes_formulas').insert([nuevo]);
-  if (error) console.error('Error al insertar volumen:', error);
+  if (error) reportarErrorSync('No se pudo guardar el volumen de fórmulas en el servidor.', error);
 }
 
 // ============ AUDIT LOG (INMUTABLE) ============
@@ -155,7 +174,7 @@ export async function fetchAuditLogs(): Promise<AuditLog[] | null> {
 
 export async function insertAuditLog(log: AuditLog) {
   const { error } = await supabase.from('audit_logs').insert([log]);
-  if (error) console.error('Error al insertar audit log:', error);
+  if (error) reportarErrorSync('No se pudo guardar el evento de auditoría en el servidor.', error);
 }
 
 // ============ CATÁLOGO DE MÉDICOS ============
@@ -177,12 +196,12 @@ export async function insertMedico(nombre: string) {
   const { error } = await supabase
     .from('medicos')
     .upsert([{ nombre }], { onConflict: 'nombre', ignoreDuplicates: true });
-  if (error) console.error('Error al insertar médico:', error);
+  if (error) reportarErrorSync('No se pudo guardar el médico en el servidor.', error);
 }
 
 export async function deleteMedico(nombre: string) {
   const { error } = await supabase.from('medicos').delete().eq('nombre', nombre);
-  if (error) console.error('Error al eliminar médico:', error);
+  if (error) reportarErrorSync('No se pudo eliminar el médico en el servidor.', error);
 }
 
 // Siembra el catálogo base de médicos la primera vez
@@ -212,12 +231,12 @@ export async function insertTipoError(nombre: string) {
   const { error } = await supabase
     .from('tipos_error')
     .upsert([{ nombre }], { onConflict: 'nombre', ignoreDuplicates: true });
-  if (error) console.error('Error al insertar tipo de error:', error);
+  if (error) reportarErrorSync('No se pudo guardar el tipo de error en el servidor.', error);
 }
 
 export async function deleteTipoError(nombre: string) {
   const { error } = await supabase.from('tipos_error').delete().eq('nombre', nombre);
-  if (error) console.error('Error al eliminar tipo de error:', error);
+  if (error) reportarErrorSync('No se pudo eliminar el tipo de error en el servidor.', error);
 }
 
 // Siembra el catálogo base de tipos de error la primera vez
@@ -352,12 +371,12 @@ export async function insertProtocolo(protocolo: ProtocoloOncologico) {
   const { error } = await supabase
     .from('protocolos')
     .upsert([protocolo], { onConflict: 'nombre', ignoreDuplicates: true });
-  if (error) console.error('Error al insertar protocolo:', error);
+  if (error) reportarErrorSync('No se pudo guardar el protocolo en el servidor.', error);
 }
 
 export async function deleteProtocolo(nombre: string) {
   const { error } = await supabase.from('protocolos').delete().eq('nombre', nombre);
-  if (error) console.error('Error al eliminar protocolo:', error);
+  if (error) reportarErrorSync('No se pudo eliminar el protocolo en el servidor.', error);
 }
 
 // ============ STORAGE DE DOCUMENTOS PDF ============

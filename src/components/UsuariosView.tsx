@@ -306,6 +306,7 @@ export default function UsuariosView({
                 <input
                   id="create-user-pwd"
                   type="password"
+                  autoComplete="new-password"
                   placeholder="Min. 6 caracteres"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

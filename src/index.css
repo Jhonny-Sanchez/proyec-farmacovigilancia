@@ -6,6 +6,16 @@
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
+/* Accesibilidad: anillo de foco visible al navegar con teclado.
+   Regla sin @layer: prevalece sobre la utilidad .outline-none de Tailwind.
+   transition: none hace que el anillo aparezca de inmediato (la utilidad
+   .transition animaría outline-color y retrasaría el indicador). */
+:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+  transition: none;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: #0B1120;

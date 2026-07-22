@@ -31,9 +31,10 @@ import {
   insertProtocolo,
   deleteProtocolo,
   limpiarPdfsVencidos,
+  onSyncError,
 } from './dataService';
 import { fechaLocalISO } from './utils';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import {
   Usuario,
   RegistroError,
@@ -49,18 +50,19 @@ import {
 } from './types';
 import { INITIAL_USERS } from './initialData';
 
-// Component imports
-import DashboardView from './components/DashboardView';
-import NuevoRegistroView from './components/NuevoRegistroView';
-import RegistrosView from './components/RegistrosView';
-import ReportesView from './components/ReportesView';
-import ExportarExcelView from './components/ExportarExcelView';
-import UsuariosView from './components/UsuariosView';
-import RolesPermisosView from './components/RolesPermisosView';
-import AuditLogView from './components/AuditLogView';
-import ConfiguracionView from './components/ConfiguracionView';
-import GuiaUsuarioView from './components/GuiaUsuarioView';
-import ProgramacionCitasView from './components/ProgramacionCitasView';
+// Vistas con carga diferida (code splitting): cada módulo se descarga solo
+// cuando el usuario navega hacia él, reduciendo el JS inicial de la app.
+const DashboardView = lazy(() => import('./components/DashboardView'));
+const NuevoRegistroView = lazy(() => import('./components/NuevoRegistroView'));
+const RegistrosView = lazy(() => import('./components/RegistrosView'));
+const ReportesView = lazy(() => import('./components/ReportesView'));
+const ExportarExcelView = lazy(() => import('./components/ExportarExcelView'));
+const UsuariosView = lazy(() => import('./components/UsuariosView'));
+const RolesPermisosView = lazy(() => import('./components/RolesPermisosView'));
+const AuditLogView = lazy(() => import('./components/AuditLogView'));
+const ConfiguracionView = lazy(() => import('./components/ConfiguracionView'));
+const GuiaUsuarioView = lazy(() => import('./components/GuiaUsuarioView'));
+const ProgramacionCitasView = lazy(() => import('./components/ProgramacionCitasView'));
 import CambiarClaveModal from './components/CambiarClaveModal';
 
 // Icon imports
@@ -86,6 +88,67 @@ import {
   Calendar,
   KeyRound,
 } from 'lucide-react';
+
+// Esqueleto de carga mostrado mientras se descarga el módulo de cada vista
+function PageLoader() {
+  return (
+    <div className="space-y-4 animate-pulse" role="status" aria-label="Cargando módulo">
+      <div className="h-8 w-64 bg-[#131B2E] rounded-lg" />
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-24 bg-[#131B2E] border border-[#1F2937] rounded-xl" />
+        ))}
+      </div>
+      <div className="h-64 bg-[#131B2E] border border-[#1F2937] rounded-xl" />
+      <span className="sr-only">Cargando…</span>
+    </div>
+  );
+}
+
+// Avisos flotantes: sincronización inicial con Supabase y errores de guardado
+function SyncStatus({
+  sincronizando,
+  syncError,
+  onDismiss,
+}: {
+  sincronizando: boolean;
+  syncError: string | null;
+  onDismiss: () => void;
+}) {
+  return (
+    <>
+      {sincronizando && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 z-50 flex items-center gap-2.5 bg-[#131B2E] border border-[#1F2937] rounded-full px-4 py-2 text-xs text-[#9CA3AF] shadow-2xl"
+        >
+          <span
+            className="w-3.5 h-3.5 border-2 border-[#3B82F6] border-t-transparent rounded-full animate-spin"
+            aria-hidden="true"
+          />
+          Sincronizando datos con el servidor…
+        </div>
+      )}
+      {syncError && (
+        <div
+          role="alert"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-start gap-2.5 bg-[#1F1315] border border-red-500/40 rounded-xl px-4 py-3 text-xs text-red-300 shadow-2xl max-w-md"
+        >
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+          <span>{syncError}</span>
+          <button
+            onClick={onDismiss}
+            aria-label="Cerrar aviso de error"
+            className="text-red-400 hover:text-white transition flex-shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function App() {
   // 1. Core persistent states loaded from LocalStorage
@@ -153,6 +216,17 @@ export default function App() {
   // Security modal: change own password
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
+  // Estado de carga inicial (visible) y último error de sincronización
+  const [sincronizando, setSincronizando] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Cuando una escritura en Supabase falla, dataService lo notifica aquí
+  // para mostrarle al usuario un aviso en pantalla (antes moría en consola).
+  useEffect(() => {
+    onSyncError((mensaje) => setSyncError(mensaje));
+    return () => onSyncError(null);
+  }, []);
+
   // Sync back to local storage
   useEffect(() => {
     localStorage.setItem('onco_users', JSON.stringify(users));
@@ -200,43 +274,49 @@ export default function App() {
     // gestionados hace más de 4 meses y luego se cargan los datos al día.
     // Un resultado null significa fallo de lectura (se conserva la caché);
     // una lista vacía significa que la base realmente está vacía.
-    limpiarPdfsVencidos().finally(() => {
-      fetchErrores().then((data) => {
+    const cargaErrores = limpiarPdfsVencidos()
+      .catch(() => undefined) // la limpieza nunca debe impedir la carga de registros
+      .then(() => fetchErrores())
+      .then((data) => {
         if (data) setErrors(data);
       });
-    });
     // Las cuentas base solo se siembran cuando la tabla está VACÍA (primera
     // instalación). Así, los usuarios eliminados por el Administrador no
     // "reviven" al recargar la aplicación.
-    fetchUsuarios().then(async (data) => {
-      if (data.length > 0) {
-        setUsers(data);
-      } else {
-        await seedUsuarios(INITIAL_USERS);
-        const sembrados = await fetchUsuarios();
-        if (sembrados.length > 0) setUsers(sembrados);
-      }
-    });
-    fetchProgramaciones().then((data) => {
-      if (data) setProgramaciones(data);
-    });
-    fetchVolumenes().then((data) => {
-      if (data) setVolumes(data);
-    });
-    fetchAuditLogs().then((data) => {
-      if (data) setAuditLogs(data);
-    });
-    fetchMedicos().then((data) => {
-      if (data.length > 0) setMedicos(data);
-      else seedMedicos(MEDICOS_CATALOG); // primera vez: siembra el catálogo base
-    });
-    fetchTiposError().then((data) => {
-      if (data.length > 0) setTiposError(data);
-      else seedTiposError(TIPOS_DE_ERROR_CATALOG); // primera vez: siembra la clasificación base
-    });
-    fetchProtocolos().then((data) => {
-      if (data.length > 0) setProtocolos(data);
-    });
+    const cargas: Promise<unknown>[] = [
+      cargaErrores,
+      fetchUsuarios().then(async (data) => {
+        if (data.length > 0) {
+          setUsers(data);
+        } else {
+          await seedUsuarios(INITIAL_USERS);
+          const sembrados = await fetchUsuarios();
+          if (sembrados.length > 0) setUsers(sembrados);
+        }
+      }),
+      fetchProgramaciones().then((data) => {
+        if (data) setProgramaciones(data);
+      }),
+      fetchVolumenes().then((data) => {
+        if (data) setVolumes(data);
+      }),
+      fetchAuditLogs().then((data) => {
+        if (data) setAuditLogs(data);
+      }),
+      fetchMedicos().then((data) => {
+        if (data.length > 0) setMedicos(data);
+        else return seedMedicos(MEDICOS_CATALOG); // primera vez: siembra el catálogo base
+      }),
+      fetchTiposError().then((data) => {
+        if (data.length > 0) setTiposError(data);
+        else return seedTiposError(TIPOS_DE_ERROR_CATALOG); // primera vez: siembra la clasificación base
+      }),
+      fetchProtocolos().then((data) => {
+        if (data.length > 0) setProtocolos(data);
+      }),
+    ];
+    // El indicador de sincronización se oculta cuando todo terminó (bien o mal)
+    Promise.allSettled(cargas).then(() => setSincronizando(false));
   }, []);
 
   // Operational scheduling handlers
@@ -808,6 +888,7 @@ export default function App() {
                 <input
                   id="login-username-input"
                   type="text"
+                  autoComplete="username"
                   placeholder="ej. admin, jregente01..."
                   value={loginUser}
                   onChange={(e) => setLoginUser(e.target.value)}
@@ -821,6 +902,7 @@ export default function App() {
                 <input
                   id="login-password-input"
                   type="password"
+                  autoComplete="current-password"
                   placeholder="Ingrese contraseña..."
                   value={loginPass}
                   onChange={(e) => setLoginPass(e.target.value)}
@@ -891,6 +973,12 @@ export default function App() {
             </p>
           </div>
         </div>
+
+        <SyncStatus
+          sincronizando={sincronizando}
+          syncError={syncError}
+          onDismiss={() => setSyncError(null)}
+        />
       </div>
     );
   }
@@ -1402,9 +1490,15 @@ export default function App() {
 
         {/* Render page routing content */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[#0B1120]">
-          {renderPage()}
+          <Suspense fallback={<PageLoader />}>{renderPage()}</Suspense>
         </main>
       </div>
+
+      <SyncStatus
+        sincronizando={sincronizando}
+        syncError={syncError}
+        onDismiss={() => setSyncError(null)}
+      />
 
       {/* Security modal: every user can change their own password */}
       {showPasswordModal && (

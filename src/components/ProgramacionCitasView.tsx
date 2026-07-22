@@ -387,6 +387,8 @@ export default function ProgramacionCitasView({
                 <input
                   id="input-buscar-cedula"
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder="Digite el número de documento y los datos del paciente se cargan automáticamente..."
                   value={cedulaBusqueda}
                   onChange={(e) => handleBuscarPorCedula(e.target.value)}
@@ -692,7 +694,7 @@ export default function ProgramacionCitasView({
               <div className="relative flex-1 md:w-64">
                 <Search className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
                 <input
-                  type="text"
+                  type="search"
                   placeholder="Buscar paciente, ID o medicamento..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}

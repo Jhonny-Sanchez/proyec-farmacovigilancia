@@ -561,6 +561,8 @@ export default function NuevoRegistroView({
                 <input
                   id="patient-doc-input"
                   type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={documento}
                   onChange={(e) => setDocumento(e.target.value.replace(/\D/g, ''))}
                   placeholder="Solo dígitos"
@@ -651,7 +653,8 @@ export default function NuevoRegistroView({
                 </label>
                 <input
                   id="patient-phone-input"
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
                   value={telefonoFijo}
                   onChange={(e) => setTelefonoFijo(e.target.value.replace(/\D/g, ''))}
                   placeholder="Ej. 6023214567"
@@ -666,7 +669,8 @@ export default function NuevoRegistroView({
                 </label>
                 <input
                   id="patient-cel-input"
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
                   value={numeroCelular}
                   onChange={(e) => setNumeroCelular(e.target.value.replace(/\D/g, ''))}
                   placeholder="Ej. 3157654321"
@@ -682,7 +686,8 @@ export default function NuevoRegistroView({
                 </label>
                 <input
                   id="patient-cel-backup1-input"
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
                   value={celularContactoAdicional1}
                   onChange={(e) => setCelularContactoAdicional1(e.target.value.replace(/\D/g, ''))}
                   placeholder="Ej. 3109876543"
@@ -697,7 +702,8 @@ export default function NuevoRegistroView({
                 </label>
                 <input
                   id="patient-cel-backup2-input"
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
                   value={celularContactoAdicional2}
                   onChange={(e) => setCelularContactoAdicional2(e.target.value.replace(/\D/g, ''))}
                   placeholder="Ej. 3181234567"

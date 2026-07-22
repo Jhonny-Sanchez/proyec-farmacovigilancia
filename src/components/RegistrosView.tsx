@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import {
   RegistroError,
   STATUS_CONFIGS,
@@ -13,7 +13,8 @@ import {
 } from '../types';
 import { obtenerEnlacePDF, subirPDF } from '../dataService';
 import { fechaLocalISO } from '../utils';
-import PdfAnnotatorModal from './PdfAnnotatorModal';
+// Carga diferida: pdf.js y pdf-lib (≈1 MB) solo se descargan al abrir el anotador
+const PdfAnnotatorModal = lazy(() => import('./PdfAnnotatorModal'));
 import {
   Search,
   CheckCircle,
@@ -470,7 +471,7 @@ export default function RegistrosView({
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
               <input
                 id="search-input"
-                type="text"
+                type="search"
                 placeholder="Buscar por ID, Nombres, Cédula o Médico..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -1259,6 +1260,20 @@ export default function RegistrosView({
 
       {/* ----------------- ANOTADOR DE PDF (QF escribe sobre el documento) ----------------- */}
       {annotating && activeViewDoc && selectedError && (
+        <Suspense
+          fallback={
+            <div
+              className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center"
+              role="status"
+              aria-label="Cargando anotador de PDF"
+            >
+              <div className="flex items-center gap-3 bg-[#131B2E] border border-[#1F2937] rounded-xl px-5 py-3 text-xs text-[#9CA3AF]">
+                <Loader2 className="w-4 h-4 animate-spin text-[#3B82F6]" />
+                Cargando herramienta de anotación…
+              </div>
+            </div>
+          }
+        >
         <PdfAnnotatorModal
           doc={activeViewDoc.doc}
           idRegistro={selectedError.id_registro}
@@ -1277,6 +1292,7 @@ export default function RegistrosView({
             closeViewer();
           }}
         />
+        </Suspense>
       )}
     </div>
   );

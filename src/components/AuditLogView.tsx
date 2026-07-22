@@ -75,7 +75,7 @@ export default function AuditLogView({ auditLogs, onNavigate }: AuditLogViewProp
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
           <input
             id="audit-search-input"
-            type="text"
+            type="search"
             placeholder="Filtrar por usuario, acción o detalle (ej. ERR-2026)..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
