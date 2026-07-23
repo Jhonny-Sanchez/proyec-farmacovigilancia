@@ -123,7 +123,7 @@ export default function GuiaUsuarioView({ onNavigate, currentUserRole }: GuiaUsu
         'Inspeccionar el historial de acciones inmutables en "Audit Log" para auditorías normativas.',
         'Cargar denominadores e indicadores de volumen total de fórmulas.',
       ],
-      tip: 'Use el selector de "Prueba Rápida" en la barra superior para cambiar temporalmente de rol y validar cómo ven la interfaz los demás usuarios clínicos.',
+      tip: 'Los roles son fijos por cuenta y se asignan desde el módulo "Usuarios Sistema". Ningún usuario, incluido el Administrador, puede cambiar el rol de su propia sesión.',
     },
     Registro: {
       title: 'Guía de Captura y Corrección (Perfil Registro)',
@@ -192,8 +192,8 @@ export default function GuiaUsuarioView({ onNavigate, currentUserRole }: GuiaUsu
       a: 'Ingrese al módulo "Exportar a Excel" en el menú lateral. El sistema consolidará toda la base de datos simulando el formato corporativo oficial "BASE_ERRORES_FORMULAS.xlsx" y registrará la acción de exportación en el Audit Log para cumplir con la normatividad de protección de datos.',
     },
     {
-      q: '¿Cómo puedo cambiar de rol para realizar pruebas rápidas?',
-      a: 'Como este es un entorno de simulación altamente funcional (Sandbox), hemos dispuesto una lista desplegable en el encabezado superior llamada "Prueba rápida". Al cambiar la opción, el sistema iniciará sesión automáticamente con el perfil correspondiente para que pueda verificar los flujos de trabajo.',
+      q: '¿Puedo cambiar de rol dentro del sistema?',
+      a: 'No. Cada cuenta tiene un único rol fijo asignado por el Administrador y la sesión no permite alternar entre perfiles. Si sus funciones cambian, solicite al Administrador la actualización de su rol en el módulo "Usuarios Sistema"; el cambio queda registrado en el Audit Log y se aplica de inmediato en la sesión del usuario.',
     },
   ];
 
@@ -391,9 +391,9 @@ export default function GuiaUsuarioView({ onNavigate, currentUserRole }: GuiaUsu
                   </div>
                 </div>
 
-                {/* Practical sandbox tip */}
+                {/* Practical role tip */}
                 <div className="bg-blue-900/10 border border-blue-500/20 p-3.5 rounded-lg space-y-1">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Consejo Práctico del Entorno de Prueba</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Consejo Práctico del Rol</p>
                   <p className="text-[11px] text-blue-200/70 leading-relaxed">
                     {roleGuides[selectedRoleGuide].tip}
                   </p>

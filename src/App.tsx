@@ -267,6 +267,26 @@ export default function App() {
       localStorage.removeItem('onco_current_user');
     }
   }, [currentUser]);
+
+  // BLOQUEO DE ROL: la sesión activa siempre refleja el registro real del
+  // usuario en la base de datos. Si el Administrador le cambia el rol, se
+  // actualiza aquí; si la cuenta fue eliminada o inactivada, la sesión se
+  // cierra. Esto también neutraliza manipulaciones manuales del
+  // localStorage (onco_current_user): el rol adulterado se sobrescribe con
+  // el rol verdadero apenas se cargan los usuarios desde Supabase.
+  useEffect(() => {
+    if (!currentUser) return;
+    const enBase = users.find((u) => u.id_usuario === currentUser.id_usuario);
+    if (!enBase || enBase.estado_cuenta === 'Inactivo') {
+      setCurrentUser(null);
+      setActivePage('dashboard');
+      setSelectedError(null);
+      return;
+    }
+    if (enBase.rol !== currentUser.rol) {
+      setCurrentUser((prev) => (prev ? { ...prev, rol: enBase.rol } : prev));
+    }
+  }, [users, currentUser]);
   // Cargar todos los datos desde Supabase al iniciar.
   // Si una tabla está vacía o aún no existe, se conserva el respaldo local.
   useEffect(() => {
@@ -451,34 +471,6 @@ export default function App() {
     setLoginPass('');
   };
 
-  // 1-Click quick login assistant
-  const handleQuickLogin = (uname: string, psw: string) => {
-    setLoginUser(uname);
-    setLoginPass(psw);
-    setTimeout(() => {
-      // Trigger submission simulated
-      const matched = users.find(
-        (u) => u.nombre_usuario === uname && u.contrasena === psw
-      );
-      if (matched && matched.estado_cuenta === 'Activo') {
-        setCurrentUser(matched);
-        setActivePage('dashboard');
-        setSelectedError(null);
-        const now = new Date();
-        const newLog: AuditLog = {
-          id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          fecha: fechaLocalISO(now),
-          hora: now.toTimeString().split(' ')[0],
-          usuario: matched.nombre_usuario,
-          accion: 'Sesión Iniciada',
-          detalle: `Inicio de sesión rápido asistido de prueba para rol: ${matched.rol}`,
-        };
-        setAuditLogs((prev) => [newLog, ...prev]);
-        insertAuditLog(newLog);
-      }
-    }, 100);
-  };
-
   const handleLogout = () => {
     if (currentUser) {
       addAuditLog('Sesión Cerrada', `El usuario ${currentUser.nombre_usuario} cerró sesión voluntariamente.`);
@@ -638,6 +630,16 @@ export default function App() {
 
   // Update user role (Admin only)
   const handleUpdateUserRole = (id_usuario: string, role: UserRole) => {
+    // BLOQUEO DE ROL: solo el Administrador gestiona roles y ningún usuario
+    // (ni siquiera el Administrador) puede modificar el rol de su propia sesión.
+    if (!currentUser || currentUser.rol !== 'Administrador') return;
+    if (id_usuario === currentUser.id_usuario) {
+      addAuditLog(
+        'Gestión Usuarios',
+        `Intento bloqueado: ${currentUser.nombre_usuario} intentó modificar su propio rol.`
+      );
+      return;
+    }
     setUsers((prev) =>
       prev.map((u) => (u.id_usuario === id_usuario ? { ...u, rol: role } : u))
     );
@@ -651,16 +653,6 @@ export default function App() {
     setVolumes((prev) => [...prev, newVol]);
     insertVolumen(newVol);
     addAuditLog('Carga Denominadores', `Registró ${newVol.cantidad_formulas_validadas} fórmulas validadas totales para la EPS ${newVol.eps}.`);
-  };
-
-  // Fast Switch Role toolbar inside Sandbox Header (makes testing super seamless)
-  const handleFastSwitchRole = (role: UserRole) => {
-    const candidate = users.find((u) => u.rol === role && u.estado_cuenta === 'Activo');
-    if (candidate) {
-      setCurrentUser(candidate);
-      setSelectedError(null);
-      addAuditLog('Cambio de Rol Rápido', `Se alternó la sesión de prueba al rol funcional: ${role}`);
-    }
   };
 
   // Enforce access control according to the role permissions matrix
@@ -921,57 +913,6 @@ export default function App() {
             </form>
           </div>
 
-          {/* Quick Sandbox Accounts Selector (Brilliant for UI/UX inspection and grading) */}
-          <div className="bg-[#131B2E]/60 border border-[#1F2937]/80 rounded-xl p-4 space-y-2.5">
-            <h3 className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider text-center">
-              Asistente de Acceso de Prueba (Clic para iniciar sesión)
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                id="quick-login-admin"
-                onClick={() => handleQuickLogin('admin', 'admin123')}
-                className="p-2 rounded bg-[#0B1120] border border-[#1F2937] text-left text-[10px] hover:border-[#3B82F6] transition text-gray-300 hover:text-white"
-              >
-                <span className="font-bold block text-red-400">1. Administrador</span>
-                <span>admin / admin123</span>
-              </button>
-              <button
-                id="quick-login-registro"
-                onClick={() => handleQuickLogin('jregente01', 'registro123')}
-                className="p-2 rounded bg-[#0B1120] border border-[#1F2937] text-left text-[10px] hover:border-[#3B82F6] transition text-gray-300 hover:text-white"
-              >
-                <span className="font-bold block text-[#22D3EE]">2. Registro</span>
-                <span>jregente01 / registro123</span>
-              </button>
-              <button
-                id="quick-login-qf"
-                onClick={() => handleQuickLogin('qf_martinez', 'quimico123')}
-                className="p-2 rounded bg-[#0B1120] border border-[#1F2937] text-left text-[10px] hover:border-[#3B82F6] transition text-gray-300 hover:text-white"
-              >
-                <span className="font-bold block text-blue-400">3. Químico Farmac.</span>
-                <span>qf_martinez / quimico123</span>
-              </button>
-              <button
-                id="quick-login-programador"
-                onClick={() => handleQuickLogin('pedro_prog', 'prog123')}
-                className="p-2 rounded bg-[#0B1120] border border-[#1F2937] text-left text-[10px] hover:border-[#3B82F6] transition text-gray-300 hover:text-white"
-              >
-                <span className="font-bold block text-cyan-400 font-sans">4. Programador Citas</span>
-                <span>pedro_prog / prog123</span>
-              </button>
-              <button
-                id="quick-login-corrector"
-                onClick={() => handleQuickLogin('corrector01', 'corrector123')}
-                className="p-2 rounded bg-[#0B1120] border border-[#1F2937] text-left text-[10px] hover:border-[#3B82F6] transition text-gray-300 hover:text-white"
-              >
-                <span className="font-bold block text-amber-400">5. Corrector Fórmulas</span>
-                <span>corrector01 / corrector123</span>
-              </button>
-            </div>
-            <p className="text-[10px] text-gray-500 italic text-center pt-1">
-              * El sistema simula el control de acceso en base a estos perfiles.
-            </p>
-          </div>
         </div>
 
         <SyncStatus
@@ -1273,22 +1214,15 @@ export default function App() {
               F.V. ONCOLOGÍA
             </span>
 
-            {/* Fast Switch Role Helper Dropdown (Saves immense reviewer time!) */}
+            {/* Rol fijo de la sesión: se asigna por el Administrador y no es intercambiable */}
             <div className="hidden sm:flex items-center gap-2 text-xs text-[#9CA3AF]">
-              <span className="text-[10px] bg-[#1F2937] px-2 py-0.5 rounded text-gray-400">Prueba rápida:</span>
-              <select
-                id="header-role-sandbox-switcher"
-                value={currentUser.rol}
-                onChange={(e) => handleFastSwitchRole(e.target.value as UserRole)}
-                className="bg-[#0B1120] border border-[#1F2937] text-gray-300 px-2 py-1 rounded text-[11px] outline-none"
+              <span className="text-[10px] bg-[#1F2937] px-2 py-0.5 rounded text-gray-400">Rol de sesión:</span>
+              <span
+                id="header-session-role-badge"
+                className="bg-[#0B1120] border border-[#1F2937] text-[#22D3EE] px-2 py-1 rounded text-[11px] font-semibold"
               >
-                <option value="Administrador">Sesión: Administrador</option>
-                <option value="Registro">Sesión: Registro</option>
-                <option value="QuimicoFarmaceutico">Sesión: Químico Farm.</option>
-                <option value="Programador">Sesión: Programador</option>
-                <option value="Corrector">Sesión: Corrector</option>
-                <option value="Consulta">Sesión: Auditor (Solo lectura)</option>
-              </select>
+                {currentUser.rol}
+              </span>
             </div>
           </div>
 

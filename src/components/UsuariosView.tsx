@@ -374,8 +374,14 @@ export default function UsuariosView({
                         <select
                           id={`user-role-select-${user.id_usuario}`}
                           value={user.rol}
+                          disabled={user.nombre_usuario === currentUser.nombre_usuario}
+                          title={
+                            user.nombre_usuario === currentUser.nombre_usuario
+                              ? 'No puede modificar su propio rol. Debe hacerlo otro Administrador.'
+                              : 'Asignar rol de la cuenta'
+                          }
                           onChange={(e) => onUpdateUserRole(user.id_usuario, e.target.value as UserRole)}
-                          className="bg-[#0B1120] border border-[#1F2937] text-gray-300 px-1.5 py-1 rounded text-[11px] outline-none"
+                          className="bg-[#0B1120] border border-[#1F2937] text-gray-300 px-1.5 py-1 rounded text-[11px] outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {ROLES_CATALOG.map((r) => (
                             <option key={r} value={r}>
