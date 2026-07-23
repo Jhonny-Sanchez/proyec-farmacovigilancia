@@ -26,8 +26,11 @@ import {
   Send,
   X,
   Check,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
-import { RegistroError, ProgramacionCita, UserRole, ProtocoloOncologico } from '../types';
+import { RegistroError, ProgramacionCita, UserRole, ProtocoloOncologico, DocumentoAdjunto } from '../types';
+import { obtenerEnlacePDF } from '../dataService';
 
 interface ProgramacionCitasViewProps {
   errors: RegistroError[];
@@ -84,6 +87,67 @@ export default function ProgramacionCitasView({
   const [simulatingAppointmentId, setSimulatingAppointmentId] = useState<string | null>(null);
   const [simulationResponse, setSimulationResponse] = useState<'Si' | 'No' | null>(null);
   const [simulationReason, setSimulationReason] = useState('');
+
+  // Visor de la fórmula médica aprobada (PDF)
+  const [pdfRegistro, setPdfRegistro] = useState<RegistroError | null>(null);
+  const [pdfDoc, setPdfDoc] = useState<DocumentoAdjunto | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+
+  const abrirDocumentoPdf = async (doc: DocumentoAdjunto) => {
+    setPdfDoc(doc);
+    setPdfUrl(null);
+    setPdfError('');
+
+    if (!doc.url) {
+      setPdfError('Este documento no tiene un archivo PDF asociado.');
+      return;
+    }
+
+    if (doc.url.startsWith('blob:')) {
+      // Documento adjuntado con una versión anterior de la app que no lo
+      // subía a la nube: el archivo nunca quedó guardado.
+      setPdfError('Este documento se adjuntó con una versión anterior y el archivo no quedó guardado en la nube. Solicite al área de Registro adjuntarlo nuevamente.');
+      return;
+    }
+
+    setPdfLoading(true);
+    try {
+      const enlace = await obtenerEnlacePDF(doc.url);
+      if (enlace) {
+        setPdfUrl(enlace);
+      } else {
+        setPdfError('No se pudo generar el enlace del documento. Intente nuevamente.');
+      }
+    } catch (err) {
+      console.error('Error al abrir documento:', err);
+      setPdfError('Ocurrió un error al cargar el documento.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  // Abre el visor con la versión más reciente de la fórmula médica del
+  // registro (la última cargada corresponde a la versión aprobada por el QF)
+  const handleVerFormulaAprobada = (rec: RegistroError) => {
+    setPdfRegistro(rec);
+    setPdfDoc(null);
+    setPdfUrl(null);
+    setPdfError('');
+    const docs = rec.formula_medica || [];
+    if (docs.length > 0) {
+      abrirDocumentoPdf(docs[docs.length - 1]);
+    }
+  };
+
+  const cerrarVisorFormula = () => {
+    setPdfRegistro(null);
+    setPdfDoc(null);
+    setPdfUrl(null);
+    setPdfError('');
+    setPdfLoading(false);
+  };
 
   // Get only approved patient records
   const approvedRecords = errors.filter(
@@ -444,6 +508,16 @@ export default function ProgramacionCitasView({
                       <p className="text-[11px] font-semibold text-cyan-300">
                         Días: <span className="text-white">{selectedRecord.dias_administracion || 'Sin definir'}</span>
                       </p>
+                      <button
+                        id="btn-ver-formula-form"
+                        type="button"
+                        onClick={() => handleVerFormulaAprobada(selectedRecord)}
+                        className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
+                        title="Ver el PDF de la fórmula médica aprobada por el Químico Farmacéutico"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Ver Fórmula Aprobada (PDF)
+                      </button>
                     </div>
                   ) : (
                     <p className="text-[11px] text-gray-400 italic">Seleccione paciente para ver ciclos.</p>
@@ -756,6 +830,9 @@ export default function ProgramacionCitasView({
                 </thead>
                 <tbody className="divide-y divide-[#1F2937] bg-[#0B1120]/30 text-xs">
                   {filteredProgramaciones.map((p) => {
+                    // Registro aprobado vinculado a la cita, para consultar su fórmula PDF
+                    const registroDeCita = errors.find((e) => e.id_registro === p.id_registro);
+
                     let badgeClass = 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20';
                     if (p.estado_programacion === 'Realizada') {
                       badgeClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
@@ -799,6 +876,18 @@ export default function ProgramacionCitasView({
                           <div className="text-[10px] text-gray-400 font-mono">
                             C.C. {p.numero_documento} | Ref: {p.id_registro}
                           </div>
+                          {registroDeCita && (
+                            <button
+                              id={`btn-ver-formula-${p.id_programacion}`}
+                              type="button"
+                              onClick={() => handleVerFormulaAprobada(registroDeCita)}
+                              className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-400 border border-emerald-900/50 hover:border-emerald-500/40 rounded transition cursor-pointer"
+                              title="Ver el PDF de la fórmula médica aprobada de este paciente"
+                            >
+                              <FileText className="w-2.5 h-2.5" />
+                              Ver Fórmula PDF
+                            </button>
+                          )}
                         </td>
                         <td className="p-3 text-gray-300 font-semibold">{p.eps}</td>
                         <td className="p-3">
@@ -1089,6 +1178,134 @@ export default function ProgramacionCitasView({
           </div>
         );
       })()}
+
+      {/* ----------------- VISOR DE LA FÓRMULA MÉDICA APROBADA ----------------- */}
+      {pdfRegistro && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
+          <div className="relative bg-[#0F172A] border border-[#1E293B] rounded-2xl w-[97vw] max-w-[1500px] h-[95vh] shadow-2xl flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="bg-[#1E293B] px-6 py-4 flex items-center justify-between border-b border-[#334155]">
+              <div className="flex items-center gap-3">
+                <FileText className="w-6 h-6 text-emerald-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-white font-sans">
+                    Fórmula Médica Aprobada — {pdfRegistro.nombre_paciente} {pdfRegistro.apellidos_paciente}
+                  </h3>
+                  <p className="text-xs text-gray-400 font-mono">
+                    C.C. {pdfRegistro.numero_documento} | Ref: {pdfRegistro.id_registro}
+                    {pdfDoc && ` | Archivo: ${pdfDoc.nombre_archivo} (${pdfDoc.tamano})`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {pdfUrl && (
+                  <button
+                    onClick={() => window.open(pdfUrl, '_blank')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                    title="Ver archivo en nueva pestaña"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>Abrir en Pestaña Nueva</span>
+                  </button>
+                )}
+                <button
+                  onClick={cerrarVisorFormula}
+                  className="p-2 bg-[#334155] hover:bg-red-500 hover:text-white text-gray-300 rounded-lg transition cursor-pointer"
+                  title="Cerrar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Selector de versiones cuando hay más de un PDF de fórmula */}
+            {(pdfRegistro.formula_medica || []).length > 1 && (
+              <div className="bg-[#0B1120] px-6 py-2.5 border-b border-[#1E293B] flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Versiones:</span>
+                {(pdfRegistro.formula_medica || []).map((d, idx, arr) => {
+                  const esVigente = idx === arr.length - 1;
+                  const activo = pdfDoc?.id_documento === d.id_documento;
+                  return (
+                    <button
+                      key={d.id_documento}
+                      type="button"
+                      onClick={() => abrirDocumentoPdf(d)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                        activo
+                          ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-[#131B2E] text-gray-400 border-[#1F2937] hover:border-emerald-500/30 hover:text-emerald-400'
+                      }`}
+                      title={`Cargado el ${d.fecha_carga} por ${d.cargado_por}`}
+                    >
+                      <FileText className="w-3 h-3" />
+                      {d.nombre_archivo}
+                      {d.es_correccion && (
+                        <span className="text-[8px] bg-amber-950 text-amber-400 px-1 rounded uppercase">Corrección</span>
+                      )}
+                      {esVigente && (
+                        <span className="text-[8px] bg-emerald-950 text-emerald-400 px-1 rounded uppercase">Vigente</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Contenido del documento */}
+            <div className="p-6 overflow-y-auto bg-slate-900 flex-1 flex flex-col items-center justify-center min-h-[400px]">
+              {(pdfRegistro.formula_medica || []).length === 0 && (
+                <div className="flex flex-col items-center gap-3 text-center max-w-md">
+                  <AlertCircle className="w-12 h-12 text-amber-400" />
+                  <p className="text-sm text-amber-400 font-semibold">
+                    Este registro aprobado no tiene un PDF de fórmula médica adjunto.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Solicite al área de Registro o al Químico Farmacéutico adjuntar la fórmula en el módulo "Registros y Correcciones".
+                  </p>
+                </div>
+              )}
+
+              {pdfLoading && (
+                <div className="flex flex-col items-center gap-3 text-gray-300">
+                  <Loader2 className="w-10 h-10 animate-spin text-blue-400" />
+                  <span className="text-sm">Generando enlace seguro del documento...</span>
+                </div>
+              )}
+
+              {pdfError && !pdfLoading && (
+                <div className="flex flex-col items-center gap-3 text-center max-w-md">
+                  <AlertCircle className="w-12 h-12 text-amber-400" />
+                  <p className="text-sm text-amber-400 font-semibold">{pdfError}</p>
+                  <p className="text-xs text-gray-500">
+                    Es posible que este documento se haya cargado antes de activar el almacenamiento seguro, o que el archivo no esté disponible.
+                  </p>
+                </div>
+              )}
+
+              {pdfUrl && !pdfLoading && (
+                <iframe
+                  src={pdfUrl}
+                  className="w-full h-full flex-1 border border-[#1E293B] rounded-xl bg-white"
+                  title="Visor de Fórmula Médica Aprobada"
+                />
+              )}
+            </div>
+
+            {/* Pie del modal */}
+            <div className="bg-[#1E293B] px-6 py-4 border-t border-[#334155] flex items-center justify-between">
+              <span className="text-[11px] text-gray-400 font-mono">
+                Consultado el: {new Date().toLocaleDateString()} a las {new Date().toLocaleTimeString()}
+              </span>
+              <button
+                onClick={cerrarVisorFormula}
+                className="px-5 py-2 bg-[#334155] hover:bg-[#475569] text-white text-xs font-bold rounded-lg transition cursor-pointer"
+              >
+                Cerrar Visor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
