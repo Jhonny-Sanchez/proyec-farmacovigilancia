@@ -32,6 +32,39 @@ import {
 import { RegistroError, ProgramacionCita, UserRole, ProtocoloOncologico, DocumentoAdjunto } from '../types';
 import { obtenerEnlacePDF } from '../dataService';
 
+// Categorías de documentos del expediente (mismas etiquetas que en Registros)
+type DocCategory =
+  | 'historia_clinica'
+  | 'politerapia_monoterapia'
+  | 'formula_medica'
+  | 'consentimiento_informado'
+  | 'resultados_laboratorio'
+  | 'resultados_imagenes'
+  | 'autorizacion_eps'
+  | 'otros_documentos';
+
+const CATEGORY_LABELS: Record<DocCategory, string> = {
+  historia_clinica: 'Historia Clínica',
+  politerapia_monoterapia: 'Politerapia o Monoterapia',
+  formula_medica: 'Fórmula Médica',
+  consentimiento_informado: 'Consentimiento Informado',
+  resultados_laboratorio: 'Resultados de Laboratorio',
+  resultados_imagenes: 'Resultados de Imágenes',
+  autorizacion_eps: 'Autorización EPS',
+  otros_documentos: 'Otros Documentos',
+};
+
+const CATEGORY_ORDER: DocCategory[] = [
+  'historia_clinica',
+  'politerapia_monoterapia',
+  'formula_medica',
+  'consentimiento_informado',
+  'resultados_laboratorio',
+  'resultados_imagenes',
+  'autorizacion_eps',
+  'otros_documentos',
+];
+
 interface ProgramacionCitasViewProps {
   errors: RegistroError[];
   programaciones: ProgramacionCita[];
@@ -88,12 +121,16 @@ export default function ProgramacionCitasView({
   const [simulationResponse, setSimulationResponse] = useState<'Si' | 'No' | null>(null);
   const [simulationReason, setSimulationReason] = useState('');
 
-  // Visor de la fórmula médica aprobada (PDF)
+  // Visor del expediente PDF del paciente (fórmula, historia clínica, etc.)
   const [pdfRegistro, setPdfRegistro] = useState<RegistroError | null>(null);
+  const [pdfCategoria, setPdfCategoria] = useState<DocCategory>('formula_medica');
   const [pdfDoc, setPdfDoc] = useState<DocumentoAdjunto | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState('');
+
+  const docsDeCategoria = (rec: RegistroError, cat: DocCategory): DocumentoAdjunto[] =>
+    (rec[cat] as DocumentoAdjunto[] | undefined) || [];
 
   const abrirDocumentoPdf = async (doc: DocumentoAdjunto) => {
     setPdfDoc(doc);
@@ -128,20 +165,31 @@ export default function ProgramacionCitasView({
     }
   };
 
-  // Abre el visor con la versión más reciente de la fórmula médica del
-  // registro (la última cargada corresponde a la versión aprobada por el QF)
-  const handleVerFormulaAprobada = (rec: RegistroError) => {
-    setPdfRegistro(rec);
+  // Cambia de categoría dentro del visor y abre su documento más reciente
+  const seleccionarCategoria = (rec: RegistroError, cat: DocCategory) => {
+    setPdfCategoria(cat);
     setPdfDoc(null);
     setPdfUrl(null);
     setPdfError('');
-    const docs = rec.formula_medica || [];
+    const docs = docsDeCategoria(rec, cat);
     if (docs.length > 0) {
       abrirDocumentoPdf(docs[docs.length - 1]);
     }
   };
 
-  const cerrarVisorFormula = () => {
+  // Abre el visor del expediente. Arranca en la fórmula médica (la última
+  // versión cargada corresponde a la aprobada por el QF); si el registro no
+  // tiene fórmula, arranca en la primera categoría que tenga documentos.
+  const handleVerDocumentosPaciente = (rec: RegistroError) => {
+    setPdfRegistro(rec);
+    const inicial =
+      docsDeCategoria(rec, 'formula_medica').length > 0
+        ? 'formula_medica'
+        : CATEGORY_ORDER.find((c) => docsDeCategoria(rec, c).length > 0) || 'formula_medica';
+    seleccionarCategoria(rec, inicial);
+  };
+
+  const cerrarVisorExpediente = () => {
     setPdfRegistro(null);
     setPdfDoc(null);
     setPdfUrl(null);
@@ -511,12 +559,12 @@ export default function ProgramacionCitasView({
                       <button
                         id="btn-ver-formula-form"
                         type="button"
-                        onClick={() => handleVerFormulaAprobada(selectedRecord)}
+                        onClick={() => handleVerDocumentosPaciente(selectedRecord)}
                         className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer"
-                        title="Ver el PDF de la fórmula médica aprobada por el Químico Farmacéutico"
+                        title="Ver los PDF del expediente: fórmula aprobada, historia clínica, politerapia y demás soportes"
                       >
                         <FileText className="w-3.5 h-3.5" />
-                        Ver Fórmula Aprobada (PDF)
+                        Ver Documentos PDF
                       </button>
                     </div>
                   ) : (
@@ -880,12 +928,12 @@ export default function ProgramacionCitasView({
                             <button
                               id={`btn-ver-formula-${p.id_programacion}`}
                               type="button"
-                              onClick={() => handleVerFormulaAprobada(registroDeCita)}
+                              onClick={() => handleVerDocumentosPaciente(registroDeCita)}
                               className="mt-1.5 inline-flex items-center gap-1 px-2 py-0.5 text-[9px] font-bold bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-400 border border-emerald-900/50 hover:border-emerald-500/40 rounded transition cursor-pointer"
-                              title="Ver el PDF de la fórmula médica aprobada de este paciente"
+                              title="Ver los PDF del expediente de este paciente: fórmula, historia clínica, politerapia y demás soportes"
                             >
                               <FileText className="w-2.5 h-2.5" />
-                              Ver Fórmula PDF
+                              Ver Documentos PDF
                             </button>
                           )}
                         </td>
@@ -1179,7 +1227,7 @@ export default function ProgramacionCitasView({
         );
       })()}
 
-      {/* ----------------- VISOR DE LA FÓRMULA MÉDICA APROBADA ----------------- */}
+      {/* ----------------- VISOR DEL EXPEDIENTE PDF DEL PACIENTE ----------------- */}
       {pdfRegistro && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
           <div className="relative bg-[#0F172A] border border-[#1E293B] rounded-2xl w-[97vw] max-w-[1500px] h-[95vh] shadow-2xl flex flex-col overflow-hidden">
@@ -1189,10 +1237,10 @@ export default function ProgramacionCitasView({
                 <FileText className="w-6 h-6 text-emerald-400" />
                 <div>
                   <h3 className="text-sm font-bold text-white font-sans">
-                    Fórmula Médica Aprobada — {pdfRegistro.nombre_paciente} {pdfRegistro.apellidos_paciente}
+                    Expediente del Paciente — {pdfRegistro.nombre_paciente} {pdfRegistro.apellidos_paciente}
                   </h3>
                   <p className="text-xs text-gray-400 font-mono">
-                    C.C. {pdfRegistro.numero_documento} | Ref: {pdfRegistro.id_registro}
+                    C.C. {pdfRegistro.numero_documento} | Ref: {pdfRegistro.id_registro} | {CATEGORY_LABELS[pdfCategoria]}
                     {pdfDoc && ` | Archivo: ${pdfDoc.nombre_archivo} (${pdfDoc.tamano})`}
                   </p>
                 </div>
@@ -1209,7 +1257,7 @@ export default function ProgramacionCitasView({
                   </button>
                 )}
                 <button
-                  onClick={cerrarVisorFormula}
+                  onClick={cerrarVisorExpediente}
                   className="p-2 bg-[#334155] hover:bg-red-500 hover:text-white text-gray-300 rounded-lg transition cursor-pointer"
                   title="Cerrar"
                 >
@@ -1218,12 +1266,45 @@ export default function ProgramacionCitasView({
               </div>
             </div>
 
-            {/* Selector de versiones cuando hay más de un PDF de fórmula */}
-            {(pdfRegistro.formula_medica || []).length > 1 && (
+            {/* Pestañas de categorías del expediente */}
+            <div className="bg-[#0B1120] px-6 py-2.5 border-b border-[#1E293B] flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Documentos:</span>
+              {CATEGORY_ORDER.map((cat) => {
+                const cantidad = docsDeCategoria(pdfRegistro, cat).length;
+                const activo = pdfCategoria === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => seleccionarCategoria(pdfRegistro, cat)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                      activo
+                        ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40'
+                        : cantidad > 0
+                          ? 'bg-[#131B2E] text-gray-300 border-[#1F2937] hover:border-emerald-500/30 hover:text-emerald-400'
+                          : 'bg-[#131B2E]/40 text-gray-600 border-[#1F2937]/50 hover:border-[#1F2937] hover:text-gray-500'
+                    }`}
+                    title={`${CATEGORY_LABELS[cat]}: ${cantidad} documento(s) cargado(s)`}
+                  >
+                    {CATEGORY_LABELS[cat]}
+                    <span
+                      className={`text-[9px] px-1 rounded font-mono ${
+                        cantidad > 0 ? 'bg-emerald-950 text-emerald-400' : 'bg-[#1F2937] text-gray-600'
+                      }`}
+                    >
+                      {cantidad}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Archivos de la categoría seleccionada */}
+            {docsDeCategoria(pdfRegistro, pdfCategoria).length > 1 && (
               <div className="bg-[#0B1120] px-6 py-2.5 border-b border-[#1E293B] flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Versiones:</span>
-                {(pdfRegistro.formula_medica || []).map((d, idx, arr) => {
-                  const esVigente = idx === arr.length - 1;
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Archivos:</span>
+                {docsDeCategoria(pdfRegistro, pdfCategoria).map((d, idx, arr) => {
+                  const esVigente = pdfCategoria === 'formula_medica' && idx === arr.length - 1;
                   const activo = pdfDoc?.id_documento === d.id_documento;
                   return (
                     <button
@@ -1253,14 +1334,14 @@ export default function ProgramacionCitasView({
 
             {/* Contenido del documento */}
             <div className="p-6 overflow-y-auto bg-slate-900 flex-1 flex flex-col items-center justify-center min-h-[400px]">
-              {(pdfRegistro.formula_medica || []).length === 0 && (
+              {docsDeCategoria(pdfRegistro, pdfCategoria).length === 0 && (
                 <div className="flex flex-col items-center gap-3 text-center max-w-md">
                   <AlertCircle className="w-12 h-12 text-amber-400" />
                   <p className="text-sm text-amber-400 font-semibold">
-                    Este registro aprobado no tiene un PDF de fórmula médica adjunto.
+                    No hay documentos cargados en {CATEGORY_LABELS[pdfCategoria]}.
                   </p>
                   <p className="text-xs text-gray-500">
-                    Solicite al área de Registro o al Químico Farmacéutico adjuntar la fórmula en el módulo "Registros y Correcciones".
+                    Seleccione otra categoría del expediente, o solicite al área de Registro adjuntar el soporte en el módulo de Registros y Correcciones.
                   </p>
                 </div>
               )}
@@ -1286,7 +1367,7 @@ export default function ProgramacionCitasView({
                 <iframe
                   src={pdfUrl}
                   className="w-full h-full flex-1 border border-[#1E293B] rounded-xl bg-white"
-                  title="Visor de Fórmula Médica Aprobada"
+                  title="Visor del Expediente del Paciente"
                 />
               )}
             </div>
@@ -1297,7 +1378,7 @@ export default function ProgramacionCitasView({
                 Consultado el: {new Date().toLocaleDateString()} a las {new Date().toLocaleTimeString()}
               </span>
               <button
-                onClick={cerrarVisorFormula}
+                onClick={cerrarVisorExpediente}
                 className="px-5 py-2 bg-[#334155] hover:bg-[#475569] text-white text-xs font-bold rounded-lg transition cursor-pointer"
               >
                 Cerrar Visor
