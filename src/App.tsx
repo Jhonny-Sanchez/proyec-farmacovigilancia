@@ -30,6 +30,7 @@ import {
   fetchProtocolos,
   insertProtocolo,
   deleteProtocolo,
+  seedProtocolos,
   limpiarPdfsVencidos,
   onSyncError,
 } from './dataService';
@@ -331,8 +332,24 @@ export default function App() {
         if (data.length > 0) setTiposError(data);
         else return seedTiposError(TIPOS_DE_ERROR_CATALOG); // primera vez: siembra la clasificación base
       }),
-      fetchProtocolos().then((data) => {
-        if (data.length > 0) setProtocolos(data);
+      fetchProtocolos().then(async (data) => {
+        if (data === null) return; // falló la lectura: se conserva lo que haya en memoria
+        if (data.length > 0) {
+          setProtocolos(data);
+          return;
+        }
+        // Primera vez: se siembra el catálogo institucional de protocolos
+        // oncológicos. Se carga bajo demanda para no engordar el paquete
+        // inicial de la aplicación.
+        const { PROTOCOLOS_ONCOLOGIA } = await import('./protocolosCatalogo');
+        const hoy = fechaLocalISO();
+        const catalogo: ProtocoloOncologico[] = PROTOCOLOS_ONCOLOGIA.map((p) => ({
+          ...p,
+          creado_por: 'Sistema',
+          fecha_creacion: hoy,
+        }));
+        setProtocolos(catalogo);
+        await seedProtocolos(catalogo);
       }),
     ];
     // El indicador de sincronización se oculta cuando todo terminó (bien o mal)
@@ -577,7 +594,10 @@ export default function App() {
       return [...prev, nuevoProtocolo];
     });
     insertProtocolo(nuevoProtocolo);
-    addAuditLog('Gestión Protocolos', `Agregó el protocolo oncológico: ${nuevoProtocolo.nombre} (${nuevoProtocolo.cantidad_ciclos} ciclos, ${nuevoProtocolo.frecuencia_aplicacion}).`);
+    addAuditLog(
+      'Gestión Protocolos',
+      `Agregó el protocolo oncológico: ${nuevoProtocolo.nombre} — Patología: ${nuevoProtocolo.patologia || 'No especificada'} — Frecuencia: ${nuevoProtocolo.frecuencia_aplicacion} — Ciclos: ${nuevoProtocolo.cantidad_ciclos}.`
+    );
   };
 
   const handleDeleteProtocolo = (nombreProtocolo: string) => {

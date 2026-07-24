@@ -6,7 +6,18 @@
 import React, { useState } from 'react';
 import { Usuario, ROLES_CATALOG, UserRole, AccountStatus, ProtocoloOncologico } from '../types';
 import { fechaLocalISO } from '../utils';
-import { Users, Plus, Shield, CheckCircle2, XCircle, ArrowLeft, Trash2, Edit, Stethoscope, AlertTriangle, FlaskConical } from 'lucide-react';
+import { Users, Plus, Shield, CheckCircle2, XCircle, ArrowLeft, Trash2, Edit, Stethoscope, AlertTriangle, FlaskConical, Search, ChevronDown } from 'lucide-react';
+
+// Los nombres de protocolo son frases largas ("CAPEOX adyuvante + Bevacizumab"):
+// se convierten en un identificador válido para los atributos id del HTML.
+const idElemento = (nombre: string) =>
+  nombre
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // tildes: "quimiorradiación" -> "quimiorradiacion"
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
 
 interface UsuariosViewProps {
   users: Usuario[];
@@ -85,49 +96,64 @@ export default function UsuariosView({
 
   // Protocolos oncológicos states
   const [protNombre, setProtNombre] = useState('');
+  const [protPatologia, setProtPatologia] = useState('');
   const [protMedicamentos, setProtMedicamentos] = useState('');
+  const [protPremedicacion, setProtPremedicacion] = useState('');
   const [protFrecuencia, setProtFrecuencia] = useState('');
-  const [protCiclos, setProtCiclos] = useState(1);
+  const [protCiclos, setProtCiclos] = useState('');
   const [protObservaciones, setProtObservaciones] = useState('');
   const [protFeedback, setProtFeedback] = useState('');
+  const [protBusqueda, setProtBusqueda] = useState('');
+  const [protExpandido, setProtExpandido] = useState<string | null>(null);
 
   const handleProtocoloSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setProtFeedback('');
 
-    if (!protNombre.trim() || !protMedicamentos.trim() || !protFrecuencia.trim()) {
-      setProtFeedback('Complete el nombre, los medicamentos y la frecuencia del protocolo.');
-      return;
-    }
-    if (protCiclos < 1) {
-      setProtFeedback('La cantidad de ciclos debe ser al menos 1.');
+    if (!protNombre.trim() || !protMedicamentos.trim() || !protFrecuencia.trim() || !protCiclos.trim()) {
+      setProtFeedback('Complete el nombre, los medicamentos de quimioterapia, la frecuencia y los ciclos.');
       return;
     }
 
-    const nombreLimpio = protNombre.trim().toUpperCase();
-    if (protocolos.some((p) => p.nombre === nombreLimpio)) {
+    const nombreLimpio = protNombre.trim();
+    if (protocolos.some((p) => p.nombre.toLowerCase() === nombreLimpio.toLowerCase())) {
       setProtFeedback('Ya existe un protocolo con ese nombre.');
       return;
     }
 
     onAddProtocolo({
       nombre: nombreLimpio,
+      patologia: protPatologia.trim() || undefined,
       medicamentos: protMedicamentos.trim(),
+      premedicacion: protPremedicacion.trim() || undefined,
       frecuencia_aplicacion: protFrecuencia.trim(),
-      cantidad_ciclos: protCiclos,
+      cantidad_ciclos: protCiclos.trim(),
       observaciones: protObservaciones.trim() || undefined,
       creado_por: currentUser.nombre_usuario,
       fecha_creacion: fechaLocalISO(),
     });
 
     setProtNombre('');
+    setProtPatologia('');
     setProtMedicamentos('');
+    setProtPremedicacion('');
     setProtFrecuencia('');
-    setProtCiclos(1);
+    setProtCiclos('');
     setProtObservaciones('');
     setProtFeedback('¡Protocolo oncológico registrado con éxito!');
     setTimeout(() => setProtFeedback(''), 3000);
   };
+
+  // Búsqueda por nombre, patología o medicamento: el catálogo institucional
+  // trae decenas de esquemas y recorrerlos a ojo no es práctico.
+  const terminoProt = protBusqueda.trim().toLowerCase();
+  const protocolosFiltrados = terminoProt
+    ? protocolos.filter((p) =>
+        `${p.nombre} ${p.patologia || ''} ${p.medicamentos} ${p.premedicacion || ''}`
+          .toLowerCase()
+          .includes(terminoProt)
+      )
+    : protocolos;
 
   const handleMedicoSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -688,55 +714,90 @@ export default function UsuariosView({
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-[#9CA3AF]">Nombre del Protocolo *</label>
-                <input
+                <textarea
                   id="create-protocolo-nombre"
-                  type="text"
-                  placeholder="ej. FOLFOX-6"
+                  rows={2}
+                  placeholder="ej. CAPEOX adyuvante + Bevacizumab"
                   value={protNombre}
                   onChange={(e) => setProtNombre(e.target.value)}
-                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none uppercase font-semibold"
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none resize-none font-semibold"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-[#9CA3AF]">Medicamentos del Esquema *</label>
+                <label className="block text-xs font-medium text-[#9CA3AF]">Patología / Tipo de Cáncer</label>
+                <textarea
+                  id="create-protocolo-patologia"
+                  rows={2}
+                  placeholder="ej. Cáncer colorrectal (adyuvante)"
+                  value={protPatologia}
+                  onChange={(e) => setProtPatologia(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[#9CA3AF]">
+                  Medicamentos de Quimioterapia (dosis teórica) *
+                </label>
                 <textarea
                   id="create-protocolo-medicamentos"
-                  rows={3}
-                  placeholder="ej. Oxaliplatino 85 mg/m² + Leucovorina 400 mg/m² + 5-Fluorouracilo 400 mg/m² bolo"
+                  rows={5}
+                  placeholder={
+                    '- Capecitabina: 1000 mg/m2 VO cada 12h, dias 1-14\n- Oxaliplatino: 130 mg/m2 IV infusion 3 horas, dia 1'
+                  }
                   value={protMedicamentos}
                   onChange={(e) => setProtMedicamentos(e.target.value)}
-                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none resize-none"
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none resize-y leading-relaxed"
+                  required
+                />
+                <p className="text-[10px] text-gray-500 italic">
+                  Un medicamento por línea, con su dosis, vía de administración y días de aplicación.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[#9CA3AF]">
+                  Medicamentos de Pre-medicación (dosis / frecuencia)
+                </label>
+                <textarea
+                  id="create-protocolo-premedicacion"
+                  rows={4}
+                  placeholder={'- Ondansetron: 16 mg IV (dia 1)\n- Dexametasona: 16 mg IV (dia 1)'}
+                  value={protPremedicacion}
+                  onChange={(e) => setProtPremedicacion(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none resize-y leading-relaxed"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[#9CA3AF]">Frecuencia de Aplicación *</label>
+                <input
+                  id="create-protocolo-frecuencia"
+                  type="text"
+                  placeholder="ej. Cada 21 días"
+                  value={protFrecuencia}
+                  onChange={(e) => setProtFrecuencia(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none"
                   required
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-[#9CA3AF]">Frecuencia de Aplicación *</label>
-                  <input
-                    id="create-protocolo-frecuencia"
-                    type="text"
-                    placeholder="ej. Cada 21 días"
-                    value={protFrecuencia}
-                    onChange={(e) => setProtFrecuencia(e.target.value)}
-                    className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none"
-                    required
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-[#9CA3AF]">Cantidad de Ciclos *</label>
-                  <input
-                    id="create-protocolo-ciclos"
-                    type="number"
-                    min="1"
-                    value={protCiclos}
-                    onChange={(e) => setProtCiclos(parseInt(e.target.value, 10) || 1)}
-                    className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] outline-none"
-                    required
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-[#9CA3AF]">Cantidad de Ciclos *</label>
+                <textarea
+                  id="create-protocolo-ciclos"
+                  rows={2}
+                  placeholder="ej. 8 ciclos, cada 21 días — o No especificado (ciclos cada 21 días)"
+                  value={protCiclos}
+                  onChange={(e) => setProtCiclos(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none resize-none"
+                  required
+                />
+                <p className="text-[10px] text-gray-500 italic">
+                  Texto libre: admite el número de ciclos y su periodicidad tal como los consigna el protocolo.
+                </p>
               </div>
 
               <div className="space-y-1.5">
@@ -744,7 +805,7 @@ export default function UsuariosView({
                 <textarea
                   id="create-protocolo-observaciones"
                   rows={2}
-                  placeholder="ej. Requiere pre-medicación antiemética. Monitorear neuropatía."
+                  placeholder="ej. Monitorear neuropatía. Solicitar CEA de control."
                   value={protObservaciones}
                   onChange={(e) => setProtObservaciones(e.target.value)}
                   className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg px-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none resize-none"
@@ -762,68 +823,121 @@ export default function UsuariosView({
             </form>
           </div>
 
-          {/* Right column: Protocolos table */}
+          {/* Right column: Protocolos list */}
           <div className="lg:col-span-2 bg-[#131B2E] border border-[#1F2937] rounded-xl p-5 space-y-4">
-            <div className="flex items-center gap-2 border-b border-[#1F2937] pb-3">
-              <FlaskConical className="w-4 h-4 text-[#3B82F6]" />
-              <h4 className="text-sm font-bold text-[#F3F4F6]">Protocolos Oncológicos Vigentes</h4>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1F2937] pb-3">
+              <div className="flex items-center gap-2">
+                <FlaskConical className="w-4 h-4 text-[#3B82F6]" />
+                <h4 className="text-sm font-bold text-[#F3F4F6]">Protocolos Oncológicos Vigentes</h4>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  {terminoProt ? `${protocolosFiltrados.length} de ${protocolos.length}` : protocolos.length}
+                </span>
+              </div>
+              <div className="relative w-full sm:w-72">
+                <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  id="buscar-protocolo"
+                  type="search"
+                  placeholder="Buscar por nombre, patología o medicamento..."
+                  value={protBusqueda}
+                  onChange={(e) => setProtBusqueda(e.target.value)}
+                  className="w-full bg-[#0B1120] border border-[#1F2937] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[#F3F4F6] placeholder-gray-600 outline-none focus:border-cyan-400 transition"
+                />
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table id="protocolos-table" className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-[#1F2937] text-[#9CA3AF] font-semibold bg-[#1F2937]/20">
-                    <th className="p-3">Protocolo</th>
-                    <th className="p-3">Medicamentos</th>
-                    <th className="p-3">Frecuencia</th>
-                    <th className="p-3">Ciclos</th>
-                    <th className="p-3 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#1F2937]/40 text-[#F3F4F6]">
-                  {protocolos.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-4 text-center text-gray-500 italic">
-                        No hay protocolos registrados. Agregue el primero con el formulario de la izquierda.
-                      </td>
-                    </tr>
-                  ) : (
-                    protocolos.map((prot) => (
-                      <tr key={prot.nombre} className="hover:bg-[#1F2937]/10 transition align-top">
-                        <td className="p-3 font-bold text-cyan-300">
-                          <div className="flex items-center gap-1.5">
-                            <FlaskConical className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                            {prot.nombre}
+            <div id="protocolos-lista" className="space-y-2 max-h-[70vh] overflow-y-auto pr-1">
+              {protocolosFiltrados.length === 0 ? (
+                <p className="p-4 text-center text-xs text-gray-500 italic">
+                  {protocolos.length === 0
+                    ? 'No hay protocolos registrados. Agregue el primero con el formulario de la izquierda.'
+                    : `Ningún protocolo coincide con "${protBusqueda}".`}
+                </p>
+              ) : (
+                protocolosFiltrados.map((prot) => {
+                  const abierto = protExpandido === prot.nombre;
+                  return (
+                    <div key={prot.nombre} className="bg-[#0B1120] border border-[#1F2937] rounded-lg">
+                      <button
+                        type="button"
+                        id={`protocolo-${idElemento(prot.nombre)}`}
+                        onClick={() => setProtExpandido(abierto ? null : prot.nombre)}
+                        className="w-full text-left p-3 flex items-start gap-2 hover:bg-[#1F2937]/20 transition rounded-lg"
+                      >
+                        <FlaskConical className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <p className="text-xs font-bold text-cyan-300">{prot.nombre}</p>
+                          {prot.patologia && <p className="text-[11px] text-gray-400">{prot.patologia}</p>}
+                          <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-gray-500">
+                            <span>
+                              <span className="font-semibold text-gray-400">Frecuencia:</span>{' '}
+                              {prot.frecuencia_aplicacion}
+                            </span>
+                            <span>
+                              <span className="font-semibold text-gray-400">Ciclos:</span> {prot.cantidad_ciclos}
+                            </span>
                           </div>
-                        </td>
-                        <td className="p-3 text-gray-300 max-w-[280px]">
-                          {prot.medicamentos}
-                          {prot.observaciones && (
-                            <p className="text-[10px] text-gray-500 italic mt-1">{prot.observaciones}</p>
+                        </div>
+                        <ChevronDown
+                          className={`w-4 h-4 text-gray-500 shrink-0 transition-transform ${abierto ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+
+                      {abierto && (
+                        <div className="border-t border-[#1F2937] p-3 space-y-3 text-[11px]">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-[#3B82F6] mb-1">
+                              Medicamentos de quimioterapia (dosis teórica)
+                            </p>
+                            <p className="text-gray-300 whitespace-pre-line leading-relaxed">{prot.medicamentos}</p>
+                          </div>
+
+                          {prot.premedicacion && (
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 mb-1">
+                                Medicamentos de pre-medicación (dosis / frecuencia)
+                              </p>
+                              <p className="text-gray-300 whitespace-pre-line leading-relaxed">{prot.premedicacion}</p>
+                            </div>
                           )}
-                        </td>
-                        <td className="p-3 whitespace-nowrap">{prot.frecuencia_aplicacion}</td>
-                        <td className="p-3 font-mono">{prot.cantidad_ciclos}</td>
-                        <td className="p-3 text-right">
-                          <button
-                            id={`delete-protocolo-${prot.nombre}`}
-                            onClick={() => {
-                              if (confirm(`¿Está seguro que desea eliminar el protocolo ${prot.nombre}? Las citas ya programadas con él no se modifican.`)) {
-                                onDeleteProtocolo(prot.nombre);
-                              }
-                            }}
-                            className="text-xs px-2.5 py-1 rounded transition border font-semibold text-red-400 border-red-400/20 hover:bg-red-500/10 flex items-center gap-1 ml-auto"
-                            title="Eliminar protocolo"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Eliminar
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+
+                          {prot.observaciones && (
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1">
+                                Observaciones
+                              </p>
+                              <p className="text-gray-300 whitespace-pre-line leading-relaxed">{prot.observaciones}</p>
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#1F2937]/60">
+                            <p className="text-[10px] text-gray-500 italic">
+                              Registrado por {prot.creado_por} el {prot.fecha_creacion}
+                            </p>
+                            <button
+                              id={`delete-protocolo-${idElemento(prot.nombre)}`}
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `¿Está seguro que desea eliminar el protocolo ${prot.nombre}? Las citas ya programadas con él no se modifican.`
+                                  )
+                                ) {
+                                  onDeleteProtocolo(prot.nombre);
+                                }
+                              }}
+                              className="text-xs px-2.5 py-1 rounded transition border font-semibold text-red-400 border-red-400/20 hover:bg-red-500/10 flex items-center gap-1"
+                              title="Eliminar protocolo"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

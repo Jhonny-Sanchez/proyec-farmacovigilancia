@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { fechaLocalISO } from '../utils';
+import { fechaLocalISO, resumirMedicamentos } from '../utils';
 import {
   Calendar,
   Clock,
@@ -288,7 +288,12 @@ export default function ProgramacionCitasView({
     setProtocoloSeleccionado(nombre);
     const prot = protocolos.find((p) => p.nombre === nombre);
     if (prot) {
-      setMedicamento(`${prot.nombre}: ${prot.medicamentos}`);
+      // Solo los nombres de los medicamentos: el detalle del esquema puede
+      // ocupar más de mil caracteres y este campo se muestra en la tabla de
+      // citas y en el mensaje que recibe el paciente. El esquema completo
+      // queda visible en la ficha del protocolo, aquí al lado.
+      const resumen = resumirMedicamentos(prot.medicamentos);
+      setMedicamento(prot.nombre.length <= 40 ? `${prot.nombre}: ${resumen}` : resumen);
     }
   };
 
@@ -650,22 +655,35 @@ export default function ProgramacionCitasView({
 
                 <div id="protocolo-info-card" className="md:col-span-2 bg-[#0B1120] border border-[#1F2937] rounded-lg p-3 flex flex-col justify-center space-y-1">
                   {protocoloActivo ? (
-                    <div className="space-y-0.5 text-[11px]">
+                    <div className="space-y-1.5 text-[11px] max-h-56 overflow-y-auto pr-1">
                       <p className="font-bold text-cyan-300">{protocoloActivo.nombre}</p>
-                      <p className="text-gray-300">
-                        <span className="text-gray-500 font-semibold">Medicamentos:</span> {protocoloActivo.medicamentos}
-                      </p>
+                      {protocoloActivo.patologia && (
+                        <p className="text-gray-300">
+                          <span className="text-gray-500 font-semibold">Patología:</span> {protocoloActivo.patologia}
+                        </p>
+                      )}
                       <p className="text-gray-300">
                         <span className="text-gray-500 font-semibold">Frecuencia:</span> {protocoloActivo.frecuencia_aplicacion}
                         <span className="text-gray-500 font-semibold ml-3">Ciclos:</span> {protocoloActivo.cantidad_ciclos}
                       </p>
+                      <div>
+                        <p className="text-gray-500 font-semibold">Medicamentos de quimioterapia (dosis teórica):</p>
+                        <p className="text-gray-300 whitespace-pre-line leading-relaxed">{protocoloActivo.medicamentos}</p>
+                      </div>
+                      {protocoloActivo.premedicacion && (
+                        <div>
+                          <p className="text-emerald-400/80 font-semibold">Pre-medicación (dosis / frecuencia):</p>
+                          <p className="text-gray-300 whitespace-pre-line leading-relaxed">{protocoloActivo.premedicacion}</p>
+                        </div>
+                      )}
                       {protocoloActivo.observaciones && (
-                        <p className="text-gray-400 italic">{protocoloActivo.observaciones}</p>
+                        <p className="text-gray-400 italic whitespace-pre-line">{protocoloActivo.observaciones}</p>
                       )}
                     </div>
                   ) : (
                     <p className="text-[11px] text-gray-400 italic">
-                      Seleccione un protocolo para ver sus medicamentos, frecuencia de aplicación y cantidad de ciclos.
+                      Seleccione un protocolo para ver su patología, los medicamentos de quimioterapia con su dosis
+                      teórica, la pre-medicación, la frecuencia de aplicación y la cantidad de ciclos.
                     </p>
                   )}
                 </div>

@@ -354,7 +354,10 @@ export async function limpiarPdfsVencidos(): Promise<void> {
 
 // ============ PROTOCOLOS ONCOLÓGICOS ============
 
-export async function fetchProtocolos(): Promise<ProtocoloOncologico[]> {
+// Devuelve null si la lectura falla y [] solo cuando el catálogo está vacío
+// de verdad: quien llama distingue "no hay nada" (hay que sembrar) de "no se
+// pudo leer" (no se debe tocar nada).
+export async function fetchProtocolos(): Promise<ProtocoloOncologico[] | null> {
   const { data, error } = await supabase
     .from('protocolos')
     .select('*')
@@ -362,7 +365,7 @@ export async function fetchProtocolos(): Promise<ProtocoloOncologico[]> {
 
   if (error) {
     console.error('Error al leer protocolos:', error);
-    return [];
+    return null;
   }
   return data as ProtocoloOncologico[];
 }
@@ -377,6 +380,24 @@ export async function insertProtocolo(protocolo: ProtocoloOncologico) {
 export async function deleteProtocolo(nombre: string) {
   const { error } = await supabase.from('protocolos').delete().eq('nombre', nombre);
   if (error) reportarErrorSync('No se pudo eliminar el protocolo en el servidor.', error);
+}
+
+// Siembra el catálogo institucional la primera vez (tabla vacía). Se envía por
+// lotes: son 74 esquemas con textos largos y una sola petición gigante puede
+// ser rechazada por tamaño.
+export async function seedProtocolos(protocolos: ProtocoloOncologico[]): Promise<boolean> {
+  const TAMANO_LOTE = 20;
+  for (let i = 0; i < protocolos.length; i += TAMANO_LOTE) {
+    const lote = protocolos.slice(i, i + TAMANO_LOTE);
+    const { error } = await supabase
+      .from('protocolos')
+      .upsert(lote, { onConflict: 'nombre', ignoreDuplicates: true });
+    if (error) {
+      console.error('Error al sembrar el catálogo de protocolos oncológicos:', error);
+      return false;
+    }
+  }
+  return true;
 }
 
 // ============ STORAGE DE DOCUMENTOS PDF ============

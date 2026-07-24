@@ -113,9 +113,11 @@ create table if not exists tipos_error (
 
 create table if not exists protocolos (
   nombre text primary key,
-  medicamentos text not null,
+  patologia text,                     -- patología / tipo de cáncer
+  medicamentos text not null,         -- quimioterapia con su dosis teórica
+  premedicacion text,                 -- pre-medicación (dosis / frecuencia)
   frecuencia_aplicacion text not null,
-  cantidad_ciclos integer not null,
+  cantidad_ciclos text not null,      -- texto libre: "8 ciclos, cada 21 días"
   observaciones text,
   creado_por text not null,
   fecha_creacion text not null,
@@ -133,6 +135,13 @@ alter table audit_logs add column if not exists creado_en timestamptz not null d
 alter table medicos add column if not exists creado_en timestamptz not null default now();
 alter table tipos_error add column if not exists creado_en timestamptz not null default now();
 alter table protocolos add column if not exists creado_en timestamptz not null default now();
+
+-- Protocolos oncológicos: campos del documento institucional de protocolos
+-- (patología y pre-medicación) y ciclos como texto libre, porque el protocolo
+-- los expresa así ("8 ciclos, cada 21 días", "No especificado").
+alter table protocolos add column if not exists patologia text;
+alter table protocolos add column if not exists premedicacion text;
+alter table protocolos alter column cantidad_ciclos type text using cantidad_ciclos::text;
 
 -- ============ 2. RLS: ROW LEVEL SECURITY ============
 -- Principio: la clave pública (anon) solo puede hacer lo que la app

@@ -114,12 +114,15 @@ export interface ProgramacionCita {
   whatsapp_enviado?: boolean;
 }
 
-// Protocolo oncológico: define medicamentos, frecuencia y ciclos de un esquema
+// Protocolo oncológico: define patología, medicamentos, premedicación,
+// frecuencia y ciclos de un esquema de quimioterapia.
 export interface ProtocoloOncologico {
   nombre: string; // clave única del protocolo (ej. FOLFOX-6)
-  medicamentos: string; // medicamentos que componen el esquema
+  patologia?: string; // patología / tipo de cáncer al que aplica el esquema
+  medicamentos: string; // medicamentos de quimioterapia con su dosis teórica
+  premedicacion?: string; // medicamentos de pre-medicación (dosis / frecuencia)
   frecuencia_aplicacion: string; // ej. "Cada 21 días"
-  cantidad_ciclos: number;
+  cantidad_ciclos: string; // texto libre: "8 ciclos, cada 21 días", "No especificado"...
   observaciones?: string;
   creado_por: string;
   fecha_creacion: string;
